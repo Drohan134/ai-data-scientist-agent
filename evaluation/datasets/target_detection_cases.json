@@ -1,0 +1,75 @@
+[
+  {
+    "case_id": "target_001",
+    "description": "Customer churn dataset",
+    "features": [
+      "age",
+      "monthly_income",
+      "tenure_months",
+      "monthly_spend",
+      "support_calls"
+    ],
+    "target": "churn",
+    "problem_type": "classification"
+  },
+  {
+    "case_id": "target_002",
+    "description": "House price prediction",
+    "features": [
+      "area",
+      "bedrooms",
+      "bathrooms",
+      "location"
+    ],
+    "target": "price",
+    "problem_type": "regression"
+  },
+  {
+    "case_id": "target_003",
+    "description": "Employee attrition prediction",
+    "features": [
+      "age",
+      "salary",
+      "years_at_company",
+      "department"
+    ],
+    "target": "attrition",
+    "problem_type": "classification"
+  },
+  {
+    "case_id": "target_004",
+    "description": "Sales prediction",
+    "features": [
+      "advertising_spend",
+      "store_size",
+      "employees",
+      "region"
+    ],
+    "target": "sales",
+    "problem_type": "regression"
+  },
+  {
+    "case_id": "target_005",
+    "description": "Loan approval prediction",
+    "features": [
+      "income",
+      "credit_score",
+      "loan_amount",
+      "employment"
+    ],
+    "target": "loan_approved",
+    "problem_type": "classification"
+  },
+  {
+    "case_id": "target_006",
+    "description": "Student marks prediction",
+    "features": [
+      "attendance",
+      "study_hours",
+      "assignments",
+      "previous_marks"
+    ],
+    "target": "final_marks",
+    "problem_type": "regression"
+  }
+]

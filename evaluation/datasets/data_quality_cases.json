@@ -1,0 +1,74 @@
+[
+  {
+    "case_id": "quality_001",
+    "required_checks": [
+      "missing_values",
+      "duplicates",
+      "id_columns",
+      "constant_columns",
+      "target_candidates",
+      "class_distribution",
+      "quality_score"
+    ]
+  },
+  {
+    "case_id": "quality_002",
+    "required_checks": [
+      "missing_values",
+      "duplicates",
+      "id_columns",
+      "constant_columns",
+      "target_candidates",
+      "class_distribution",
+      "quality_score"
+    ]
+  },
+  {
+    "case_id": "quality_003",
+    "required_checks": [
+      "missing_values",
+      "duplicates",
+      "id_columns",
+      "constant_columns",
+      "target_candidates",
+      "class_distribution",
+      "quality_score"
+    ]
+  },
+  {
+    "case_id": "quality_004",
+    "required_checks": [
+      "missing_values",
+      "duplicates",
+      "id_columns",
+      "constant_columns",
+      "target_candidates",
+      "class_distribution",
+      "quality_score"
+    ]
+  },
+  {
+    "case_id": "quality_005",
+    "required_checks": [
+      "missing_values",
+      "duplicates",
+      "id_columns",
+      "constant_columns",
+      "target_candidates",
+      "class_distribution",
+      "quality_score"
+    ]
+  },
+  {
+    "case_id": "quality_006",
+    "required_checks": [
+      "missing_values",
+      "duplicates",
+      "id_columns",
+      "constant_columns",
+      "target_candidates",
+      "class_distribution",
+      "quality_score"
+    ]
+  }
+]

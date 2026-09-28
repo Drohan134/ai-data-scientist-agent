@@ -1,0 +1,316 @@
+
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>AI Data Scientist Report</title>
+
+<style>
+
+body {
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+
+    max-width: 1000px;
+
+    margin: 40px auto;
+
+    padding: 0 25px;
+
+    line-height: 1.7;
+
+    color: #222;
+
+    background: #f7f9fc;
+}
+
+.container {
+    background: white;
+
+    padding: 40px;
+
+    border-radius: 12px;
+
+    box-shadow:
+        0 4px 20px rgba(0,0,0,0.08);
+}
+
+h1 {
+    color: #1565c0;
+
+    border-bottom:
+        3px solid #1565c0;
+
+    padding-bottom: 10px;
+}
+
+h2 {
+    color: #1976d2;
+
+    margin-top: 35px;
+
+    border-bottom:
+        1px solid #e0e0e0;
+
+    padding-bottom: 6px;
+}
+
+h3 {
+    color: #333;
+}
+
+table {
+    width: 100%;
+
+    border-collapse: collapse;
+
+    margin: 20px 0;
+}
+
+th,
+td {
+    border: 1px solid #ddd;
+
+    padding: 10px;
+
+    text-align: left;
+}
+
+th {
+    background: #1976d2;
+
+    color: white;
+}
+
+tr:nth-child(even) {
+    background: #f2f6fa;
+}
+
+code {
+    background: #f1f1f1;
+
+    padding: 3px 6px;
+
+    border-radius: 4px;
+}
+
+pre {
+    background: #f4f4f4;
+
+    padding: 15px;
+
+    border-radius: 8px;
+
+    overflow-x: auto;
+}
+
+blockquote {
+    border-left:
+        4px solid #1976d2;
+
+    padding-left: 15px;
+
+    color: #555;
+}
+
+li {
+    margin: 6px 0;
+}
+
+.footer {
+    margin-top: 40px;
+
+    padding-top: 15px;
+
+    border-top:
+        1px solid #ddd;
+
+    color: #777;
+
+    font-size: 14px;
+
+    text-align: center;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container">
+
+<h1 id="ai-data-scientist-report">AI Data Scientist Report</h1>
+<blockquote>
+<p>This report was generated deterministically from the analysis results. Set AI_DATA_SCIENTIST_LLM_REPORT=1 to request an LLM-written report.</p>
+</blockquote>
+<h2 id="1-executive-summary">1. Executive Summary</h2>
+<p>The dataset contains <strong>9551 rows</strong> and <strong>21 columns</strong>.
+The calculated data quality score is <strong>94.99/100</strong>.
+The machine learning analysis evaluated multiple models. The reported best-model result was <strong>Gradient Boosting</strong>.
+The critic stage identified limitations that should be considered when interpreting the machine learning results.</p>
+<h2 id="2-dataset-overview">2. Dataset Overview</h2>
+<ul>
+<li>Rows: 9551</li>
+<li>Columns: 21</li>
+<li>Columns:</li>
+<li><code>Restaurant ID</code></li>
+<li><code>Restaurant Name</code></li>
+<li><code>Country Code</code></li>
+<li><code>City</code></li>
+<li><code>Address</code></li>
+<li><code>Locality</code></li>
+<li><code>Locality Verbose</code></li>
+<li><code>Longitude</code></li>
+<li><code>Latitude</code></li>
+<li><code>Cuisines</code></li>
+<li><code>Average Cost for two</code></li>
+<li><code>Currency</code></li>
+<li><code>Has Table booking</code></li>
+<li><code>Has Online delivery</code></li>
+<li><code>Is delivering now</code></li>
+<li><code>Switch to order menu</code></li>
+<li><code>Price range</code></li>
+<li><code>Aggregate rating</code></li>
+<li><code>Rating color</code></li>
+<li><code>Rating text</code></li>
+<li><code>Votes</code></li>
+</ul>
+<p>Missing values identified during profiling:
+- <code>Cuisines</code>: 9</p>
+<h2 id="3-data-quality">3. Data Quality</h2>
+<ul>
+<li>Duplicate rows: 0</li>
+<li>Constant columns: Switch to order menu</li>
+<li>High-cardinality columns: Restaurant Name, Address</li>
+<li>Binary columns: Has Table booking, Has Online delivery, Is delivering now</li>
+<li>Potential target columns: Has Table booking, Has Online delivery, Is delivering now, Rating color, Rating text</li>
+</ul>
+<h2 id="4-data-cleaning">4. Data Cleaning</h2>
+<ul>
+<li>Rows: 9551 → 9551</li>
+<li>Columns: 21 → 20</li>
+</ul>
+<h2 id="5-exploratory-data-analysis">5. Exploratory Data Analysis</h2>
+<p>Strong observed correlations:
+- <code>Country Code</code> ↔ <code>Longitude</code>: -0.698
+- <code>Price range</code> ↔ <code>Aggregate rating</code>: 0.438
+- <code>Restaurant ID</code> ↔ <code>Aggregate rating</code>: -0.326
+- <code>Aggregate rating</code> ↔ <code>Votes</code>: 0.314
+- <code>Price range</code> ↔ <code>Votes</code>: 0.309
+- <code>Country Code</code> ↔ <code>Aggregate rating</code>: 0.282
+- <code>Country Code</code> ↔ <code>Price range</code>: 0.243
+- <code>Restaurant ID</code> ↔ <code>Longitude</code>: -0.226
+- <code>Latitude</code> ↔ <code>Price range</code>: -0.167
+- <code>Country Code</code> ↔ <code>Votes</code>: 0.155
+- <code>Restaurant ID</code> ↔ <code>Country Code</code>: 0.148
+- <code>Restaurant ID</code> ↔ <code>Votes</code>: -0.147
+- <code>Restaurant ID</code> ↔ <code>Price range</code>: -0.135
+- <code>Longitude</code> ↔ <code>Aggregate rating</code>: -0.117
+- <code>Latitude</code> ↔ <code>Average Cost for two</code>: -0.111
+- <code>Longitude</code> ↔ <code>Votes</code>: -0.085
+- <code>Longitude</code> ↔ <code>Price range</code>: -0.079
+- <code>Average Cost for two</code> ↔ <code>Price range</code>: 0.075
+- <code>Average Cost for two</code> ↔ <code>Votes</code>: 0.068
+- <code>Restaurant ID</code> ↔ <code>Latitude</code>: -0.052
+- <code>Average Cost for two</code> ↔ <code>Aggregate rating</code>: 0.052
+- <code>Longitude</code> ↔ <code>Average Cost for two</code>: 0.046
+- <code>Country Code</code> ↔ <code>Average Cost for two</code>: 0.043
+- <code>Longitude</code> ↔ <code>Latitude</code>: 0.043
+- <code>Latitude</code> ↔ <code>Votes</code>: -0.023
+- <code>Country Code</code> ↔ <code>Latitude</code>: 0.02
+- <code>Restaurant ID</code> ↔ <code>Average Cost for two</code>: -0.002
+- <code>Latitude</code> ↔ <code>Aggregate rating</code>: 0.001</p>
+<p>These are observed statistical relationships and should not be interpreted as evidence of causation.</p>
+<p>Detected outliers:
+- <code>Country Code</code>: 899
+- <code>Longitude</code>: 1953
+- <code>Latitude</code>: 1982
+- <code>Average Cost for two</code>: 853
+- <code>Price range</code>: 586
+- <code>Aggregate rating</code>: 2148
+- <code>Votes</code>: 1126</p>
+<h2 id="6-machine-learning-analysis">6. Machine Learning Analysis</h2>
+<ul>
+<li>Target column: <code>Has Table booking</code></li>
+<li>Problem type: <code>classification</code></li>
+<li>Training samples: 7640</li>
+<li>Test samples: 1911</li>
+<li>Removed identifier columns: Address</li>
+</ul>
+<h3 id="model-results">Model Results</h3>
+<p><strong>Logistic Regression</strong>
+- accuracy: 0.9006
+- precision: 0.8884
+- recall: 0.9006
+- f1_score: 0.8794
+- roc_auc: 0.9392</p>
+<p><strong>Random Forest</strong>
+- accuracy: 0.9215
+- precision: 0.9146
+- recall: 0.9215
+- f1_score: 0.9147
+- roc_auc: 0.9644</p>
+<p><strong>Gradient Boosting</strong>
+- accuracy: 0.9383
+- precision: 0.9392
+- recall: 0.9383
+- f1_score: 0.9387
+- roc_auc: 0.9696</p>
+<p>Reported best model: <strong>Gradient Boosting</strong></p>
+<h2 id="7-validation-and-critic-findings">7. Validation and Critic Findings</h2>
+<h3 id="findings">Findings</h3>
+<ul>
+<li>Missing values detected before cleaning: {'Cuisines': {'count': 9, 'percentage': 0.09}}</li>
+<li>No duplicate rows detected.</li>
+<li>Data cleaning successfully removed remaining missing values.</li>
+<li>Dataset contains 9551 rows.</li>
+<li>Training set contains 7640 samples.</li>
+<li>Test set contains 1911 samples.</li>
+<li>Evaluated 3 machine learning models.</li>
+<li>Best model by F1 score: Gradient Boosting.</li>
+<li>Potential outliers detected in: Country Code: 899, Longitude: 1953, Latitude: 1982, Average Cost for two: 853, Price range: 586, Aggregate rating: 2148, Votes: 1126</li>
+</ul>
+<h3 id="critic-recommendation">Critic Recommendation</h3>
+<p>No major validation issues detected.</p>
+<h2 id="8-key-findings">8. Key Findings</h2>
+<ol>
+<li>Missing data was identified during the profiling stage.</li>
+<li>Several strong statistical relationships were identified during EDA.</li>
+<li>Multiple machine learning models were evaluated.</li>
+</ol>
+<h2 id="9-recommendations">9. Recommendations</h2>
+<ul>
+<li>Treat the reported model metrics as evaluation results on the available dataset rather than proof of generalization.</li>
+<li>Consider additional validation data or cross-validation before drawing stronger conclusions from model performance.</li>
+<li>Investigate the strong feature relationships further to understand whether they reflect meaningful domain patterns or dataset construction.</li>
+<li>Review the critic warnings before using the model for real-world decision making.</li>
+</ul>
+<h2 id="10-conclusion">10. Conclusion</h2>
+<p>The AI Data Scientist pipeline completed profiling, data quality analysis, cleaning, EDA, visualization, machine learning analysis, and validation. The results should be interpreted in the context of the dataset characteristics and the limitations identified by the critic stage.</p>
+
+<div class="footer">
+
+Generated automatically by
+AI Data Scientist Agent
+
+</div>
+
+</div>
+
+</body>
+
+</html>

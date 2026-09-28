@@ -1,0 +1,68 @@
+[
+  {
+    "case_id": "report_001",
+    "required_sections": [
+      "executive_summary",
+      "data_profile",
+      "data_quality",
+      "eda",
+      "ml_results",
+      "conclusion"
+    ]
+  },
+  {
+    "case_id": "report_002",
+    "required_sections": [
+      "executive_summary",
+      "data_profile",
+      "data_quality",
+      "eda",
+      "ml_results",
+      "conclusion"
+    ]
+  },
+  {
+    "case_id": "report_003",
+    "required_sections": [
+      "executive_summary",
+      "data_profile",
+      "data_quality",
+      "eda",
+      "ml_results",
+      "conclusion"
+    ]
+  },
+  {
+    "case_id": "report_004",
+    "required_sections": [
+      "executive_summary",
+      "data_profile",
+      "data_quality",
+      "eda",
+      "ml_results",
+      "conclusion"
+    ]
+  },
+  {
+    "case_id": "report_005",
+    "required_sections": [
+      "executive_summary",
+      "data_profile",
+      "data_quality",
+      "eda",
+      "ml_results",
+      "conclusion"
+    ]
+  },
+  {
+    "case_id": "report_006",
+    "required_sections": [
+      "executive_summary",
+      "data_profile",
+      "data_quality",
+      "eda",
+      "ml_results",
+      "conclusion"
+    ]
+  }
+]

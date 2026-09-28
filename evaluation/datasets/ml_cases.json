@@ -1,0 +1,93 @@
+[
+  {
+    "case_id": "ml_001",
+    "problem_type": "classification",
+    "target": "churn",
+    "expected_models": [
+      "Logistic Regression",
+      "Random Forest",
+      "Gradient Boosting"
+    ],
+    "required_metrics": [
+      "accuracy",
+      "precision",
+      "recall",
+      "f1_score",
+      "roc_auc"
+    ]
+  },
+  {
+    "case_id": "ml_002",
+    "problem_type": "regression",
+    "target": "price",
+    "expected_models": [
+      "Linear Regression",
+      "Random Forest",
+      "Gradient Boosting"
+    ],
+    "required_metrics": [
+      "mae",
+      "r2_score"
+    ]
+  },
+  {
+    "case_id": "ml_003",
+    "problem_type": "classification",
+    "target": "loan_approved",
+    "expected_models": [
+      "Logistic Regression",
+      "Random Forest",
+      "Gradient Boosting"
+    ],
+    "required_metrics": [
+      "accuracy",
+      "precision",
+      "recall",
+      "f1_score"
+    ]
+  },
+  {
+    "case_id": "ml_004",
+    "problem_type": "regression",
+    "target": "sales",
+    "expected_models": [
+      "Linear Regression",
+      "Random Forest",
+      "Gradient Boosting"
+    ],
+    "required_metrics": [
+      "mae",
+      "r2_score"
+    ]
+  },
+  {
+    "case_id": "ml_005",
+    "problem_type": "classification",
+    "target": "attrition",
+    "expected_models": [
+      "Logistic Regression",
+      "Random Forest",
+      "Gradient Boosting"
+    ],
+    "required_metrics": [
+      "accuracy",
+      "precision",
+      "recall",
+      "f1_score"
+    ]
+  },
+  {
+    "case_id": "ml_006",
+    "problem_type": "regression",
+    "target": "final_marks",
+    "expected_models": [
+      "Linear Regression",
+      "Random Forest",
+      "Gradient Boosting"
+    ],
+    "required_metrics": [
+      "mae",
+      "r2_score"
+    ]
+  }
+]

@@ -1,0 +1,162 @@
+[
+  {
+    "case_id": "prep_001",
+    "description": "Missing values with different numeric scales and categorical features",
+    "input": {
+      "missing_values": true,
+      "numeric_scale_difference": true,
+      "categorical_features": true,
+      "extreme_skew": false
+    },
+    "expected": {
+      "imputation": true,
+      "scaling": true,
+      "encoding": true,
+      "transformation": false
+    }
+  },
+  {
+    "case_id": "prep_002",
+    "description": "Clean numeric data with similar scales and no categorical features",
+    "input": {
+      "missing_values": false,
+      "numeric_scale_difference": false,
+      "categorical_features": false,
+      "extreme_skew": false
+    },
+    "expected": {
+      "imputation": false,
+      "scaling": false,
+      "encoding": false,
+      "transformation": false
+    }
+  },
+  {
+    "case_id": "prep_003",
+    "description": "Missing values only",
+    "input": {
+      "missing_values": true,
+      "numeric_scale_difference": false,
+      "categorical_features": false,
+      "extreme_skew": false
+    },
+    "expected": {
+      "imputation": true,
+      "scaling": false,
+      "encoding": false,
+      "transformation": false
+    }
+  },
+  {
+    "case_id": "prep_004",
+    "description": "Categorical features only",
+    "input": {
+      "missing_values": false,
+      "numeric_scale_difference": false,
+      "categorical_features": true,
+      "extreme_skew": false
+    },
+    "expected": {
+      "imputation": false,
+      "scaling": false,
+      "encoding": true,
+      "transformation": false
+    }
+  },
+  {
+    "case_id": "prep_005",
+    "description": "Numeric features with substantially different ranges",
+    "input": {
+      "missing_values": false,
+      "numeric_scale_difference": true,
+      "categorical_features": false,
+      "extreme_skew": false
+    },
+    "expected": {
+      "imputation": false,
+      "scaling": true,
+      "encoding": false,
+      "transformation": false
+    }
+  },
+  {
+    "case_id": "prep_006",
+    "description": "Highly skewed numeric feature",
+    "input": {
+      "missing_values": false,
+      "numeric_scale_difference": false,
+      "categorical_features": false,
+      "extreme_skew": true
+    },
+    "expected": {
+      "imputation": false,
+      "scaling": false,
+      "encoding": false,
+      "transformation": true
+    }
+  },
+  {
+    "case_id": "prep_007",
+    "description": "Missing values and categorical features",
+    "input": {
+      "missing_values": true,
+      "numeric_scale_difference": false,
+      "categorical_features": true,
+      "extreme_skew": false
+    },
+    "expected": {
+      "imputation": true,
+      "scaling": false,
+      "encoding": true,
+      "transformation": false
+    }
+  },
+  {
+    "case_id": "prep_008",
+    "description": "Scaling and transformation required",
+    "input": {
+      "missing_values": false,
+      "numeric_scale_difference": true,
+      "categorical_features": false,
+      "extreme_skew": true
+    },
+    "expected": {
+      "imputation": false,
+      "scaling": true,
+      "encoding": false,
+      "transformation": true
+    }
+  },
+  {
+    "case_id": "prep_009",
+    "description": "All preprocessing operations required",
+    "input": {
+      "missing_values": true,
+      "numeric_scale_difference": true,
+      "categorical_features": true,
+      "extreme_skew": true
+    },
+    "expected": {
+      "imputation": true,
+      "scaling": true,
+      "encoding": true,
+      "transformation": true
+    }
+  },
+  {
+    "case_id": "prep_010",
+    "description": "No preprocessing required",
+    "input": {
+      "missing_values": false,
+      "numeric_scale_difference": false,
+      "categorical_features": false,
+      "extreme_skew": false
+    },
+    "expected": {
+      "imputation": false,
+      "scaling": false,
+      "encoding": false,
+      "transformation": false
+    }
+  }
+]

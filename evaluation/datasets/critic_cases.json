@@ -1,0 +1,386 @@
+[
+  {
+    "case_id": "critic_001",
+    "description": "Small dataset",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 50
+        },
+        "strong_correlations": [],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 40,
+        "test_samples": 10,
+        "models": {},
+        "best_model": null
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "Dataset contains only 50 observations"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_002",
+    "description": "Small test set",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 200
+        },
+        "strong_correlations": [],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 180,
+        "test_samples": 20,
+        "models": {},
+        "best_model": null
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "Test set contains only 20 samples"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_003",
+    "description": "Perfect accuracy",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 200
+        },
+        "strong_correlations": [],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 160,
+        "test_samples": 40,
+        "models": {
+          "Logistic Regression": {
+            "accuracy": 1.0,
+            "f1_score": 0.9,
+            "roc_auc": 0.95
+          },
+          "Random Forest": {
+            "accuracy": 1.0,
+            "f1_score": 0.9,
+            "roc_auc": 0.95
+          }
+        },
+        "best_model": "Tie: Logistic Regression, Random Forest"
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "All evaluated models achieved 100% accuracy"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_004",
+    "description": "Perfect F1",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 200
+        },
+        "strong_correlations": [],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 160,
+        "test_samples": 40,
+        "models": {
+          "Logistic Regression": {
+            "accuracy": 0.95,
+            "f1_score": 1.0,
+            "roc_auc": 0.98
+          },
+          "Random Forest": {
+            "accuracy": 0.94,
+            "f1_score": 1.0,
+            "roc_auc": 0.97
+          }
+        },
+        "best_model": "Tie: Logistic Regression, Random Forest"
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "All evaluated models achieved perfect F1 scores"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_005",
+    "description": "Perfect ROC-AUC",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 200
+        },
+        "strong_correlations": [],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 160,
+        "test_samples": 40,
+        "models": {
+          "Logistic Regression": {
+            "accuracy": 0.95,
+            "f1_score": 0.94,
+            "roc_auc": 1.0
+          },
+          "Random Forest": {
+            "accuracy": 0.94,
+            "f1_score": 0.93,
+            "roc_auc": 1.0
+          }
+        },
+        "best_model": "Logistic Regression"
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "All evaluated models achieved perfect ROC-AUC"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_006",
+    "description": "Identical model F1 scores",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 200
+        },
+        "strong_correlations": [],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 160,
+        "test_samples": 40,
+        "models": {
+          "Logistic Regression": {
+            "accuracy": 0.90,
+            "f1_score": 0.90,
+            "roc_auc": 0.92
+          },
+          "Random Forest": {
+            "accuracy": 0.91,
+            "f1_score": 0.90,
+            "roc_auc": 0.93
+          }
+        },
+        "best_model": "Tie: Logistic Regression, Random Forest"
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "All evaluated models have identical F1 scores"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_007",
+    "description": "High correlations",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 200
+        },
+        "strong_correlations": [
+          {
+            "feature_1": "age",
+            "feature_2": "income",
+            "correlation": 0.95
+          },
+          {
+            "feature_1": "income",
+            "feature_2": "spend",
+            "correlation": -0.92
+          }
+        ],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 160,
+        "test_samples": 40,
+        "models": {},
+        "best_model": null
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "2 feature pairs have absolute correlation >= 0.90"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_008",
+    "description": "Outliers detected",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 200
+        },
+        "strong_correlations": [],
+        "outliers": {
+          "income": {
+            "count": 3
+          },
+          "spend": {
+            "count": 1
+          }
+        }
+      },
+      "ml_report": {
+        "train_samples": 160,
+        "test_samples": 40,
+        "models": {},
+        "best_model": null
+      }
+    },
+    "expected": {
+      "finding_contains": [
+        "Potential outliers detected in: income: 3, spend: 1"
+      ]
+    }
+  },
+  {
+    "case_id": "critic_009",
+    "description": "Healthy dataset",
+    "input": {
+      "quality_report": {},
+      "cleaning_report": {
+        "remaining_missing_values": 0
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 500
+        },
+        "strong_correlations": [],
+        "outliers": {}
+      },
+      "ml_report": {
+        "train_samples": 400,
+        "test_samples": 100,
+        "models": {
+          "Logistic Regression": {
+            "accuracy": 0.88,
+            "f1_score": 0.86,
+            "roc_auc": 0.91
+          },
+          "Random Forest": {
+            "accuracy": 0.89,
+            "f1_score": 0.87,
+            "roc_auc": 0.92
+          }
+        },
+        "best_model": "Random Forest"
+      }
+    },
+    "expected": {
+      "warning_count": 0,
+      "recommendation": "No major validation issues detected."
+    }
+  },
+  {
+    "case_id": "critic_010",
+    "description": "Multiple validation issues",
+    "input": {
+      "quality_report": {
+        "missing_values": {
+          "income": 5
+        },
+        "duplicate_rows": 2
+      },
+      "cleaning_report": {
+        "remaining_missing_values": 1
+      },
+      "eda_report": {
+        "dataset_shape": {
+          "rows": 50
+        },
+        "strong_correlations": [
+          {
+            "feature_1": "age",
+            "feature_2": "income",
+            "correlation": 0.96
+          }
+        ],
+        "outliers": {
+          "income": {
+            "count": 2
+          }
+        }
+      },
+      "ml_report": {
+        "train_samples": 40,
+        "test_samples": 10,
+        "models": {
+          "Logistic Regression": {
+            "accuracy": 1.0,
+            "f1_score": 1.0,
+            "roc_auc": 1.0
+          },
+          "Random Forest": {
+            "accuracy": 1.0,
+            "f1_score": 1.0,
+            "roc_auc": 1.0
+          }
+        },
+        "best_model": "Tie: Logistic Regression, Random Forest"
+      }
+    },
+    "expected": {
+      "warning_contains": [
+        "duplicate rows were detected",
+        "missing values remain after cleaning",
+        "All evaluated models achieved 100% accuracy",
+        "All evaluated models achieved perfect F1 scores",
+        "All evaluated models achieved perfect ROC-AUC",
+        "All evaluated models have identical F1 scores",
+        "feature pairs have absolute correlation >= 0.90"
+      ]
+    }
+  }
+]

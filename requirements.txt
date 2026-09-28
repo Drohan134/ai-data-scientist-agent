@@ -1,0 +1,26 @@
+# Data Science
+pandas
+numpy
+scikit-learn
+
+# Visualization
+matplotlib
+seaborn
+plotly
+
+# Data Input
+openpyxl
+
+# Frontend
+streamlit
+
+# Agentic AI
+langchain
+langgraph
+langchain-google-genai
+
+# Environment
+python-dotenv
+
+# Testing
+pytest

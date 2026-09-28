@@ -1,0 +1,29 @@
+2026-09-25 15:22:08,324 - INFO - Google Generative AI instrumentation enabled
+2026-09-25 15:22:09,563 - INFO - Google Generative AI instrumentation disabled
+2026-09-25 15:22:09,690 - ERROR - Failed to instrument LanggraphInstrumentor for agentops.instrumentation.agentic.langgraph: cannot import name 'END' from partially initialized module 'langgraph.constants' (most likely due to a circular import) (D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\langgraph\constants.py)
+Traceback (most recent call last):
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\agentops\instrumentation\__init__.py", line 511, in instrument_one
+    instrumentor.instrument(tracer_provider=tracer.provider)
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\opentelemetry\instrumentation\instrumentor.py", line 114, in instrument
+    result = self._instrument(  # pylint: disable=assignment-from-no-return
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\agentops\instrumentation\agentic\langgraph\instrumentation.py", line 51, in _instrument
+    wrap_function_wrapper("langgraph.graph.state", "StateGraph.__init__", self._wrap_state_graph_init)
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\wrapt\patches.py", line 114, in wrap_function_wrapper
+    return wrap_object(module, name, FunctionWrapper, (wrapper,))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\wrapt\patches.py", line 60, in wrap_object
+    (parent, attribute, original) = resolve_path(module, name)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\wrapt\patches.py", line 17, in resolve_path
+    __import__(module)
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\agentops\instrumentation\__init__.py", line 387, in _import_monitor
+    module = _original_builtins_import(name, globals_dict, locals_dict, fromlist, level)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\langgraph\graph\state.py", line 60, in <module>
+    from langgraph.constants import END, START, TAG_HIDDEN
+ImportError: cannot import name 'END' from partially initialized module 'langgraph.constants' (most likely due to a circular import) (D:\AC_AIML\Projects\ai-data-scientist-agent\venv\Lib\site-packages\langgraph\constants.py)
+2026-09-25 15:22:58,487 - WARNING - start_session() is deprecated and will be removed in v4 in the future. Use agentops.start_trace() instead.
+2026-09-25 15:22:58,599 - INFO - Session Replay for session trace: https://app.agentops.ai/sessions?trace_id=b0ef9f986d3620e8954536ae54808e91
+2026-09-25 15:24:04,692 - WARNING - end_session() is deprecated and will be removed in v4 in the future. Use agentops.end_trace() instead.
+2026-09-25 15:24:07,196 - INFO - Session Replay for session.session trace: https://app.agentops.ai/sessions?trace_id=b0ef9f986d3620e8954536ae54808e91

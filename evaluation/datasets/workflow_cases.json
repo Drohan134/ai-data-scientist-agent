@@ -1,0 +1,91 @@
+[
+  {
+    "case_id": "workflow_001",
+    "completed_steps": [],
+    "expected_next": "Profiling"
+  },
+  {
+    "case_id": "workflow_002",
+    "completed_steps": [
+      "Profiling"
+    ],
+    "expected_next": "Quality"
+  },
+  {
+    "case_id": "workflow_003",
+    "completed_steps": [
+      "Profiling",
+      "Quality"
+    ],
+    "expected_next": "Cleaning"
+  },
+  {
+    "case_id": "workflow_004",
+    "completed_steps": [
+      "Profiling",
+      "Quality",
+      "Cleaning"
+    ],
+    "expected_next": "EDA"
+  },
+  {
+    "case_id": "workflow_005",
+    "completed_steps": [
+      "Profiling",
+      "Quality",
+      "Cleaning",
+      "EDA"
+    ],
+    "expected_next": "Visualization"
+  },
+  {
+    "case_id": "workflow_006",
+    "completed_steps": [
+      "Profiling",
+      "Quality",
+      "Cleaning",
+      "EDA",
+      "Visualization"
+    ],
+    "expected_next": "Preprocessing"
+  },
+  {
+    "case_id": "workflow_007",
+    "completed_steps": [
+      "Profiling",
+      "Quality",
+      "Cleaning",
+      "EDA",
+      "Visualization",
+      "Preprocessing"
+    ],
+    "expected_next": "ML"
+  },
+  {
+    "case_id": "workflow_008",
+    "completed_steps": [
+      "Profiling",
+      "Quality",
+      "Cleaning",
+      "EDA",
+      "Visualization",
+      "Preprocessing",
+      "ML"
+    ],
+    "expected_next": "Critic"
+  },
+  {
+    "case_id": "workflow_009",
+    "completed_steps": [
+      "Profiling",
+      "Quality",
+      "Cleaning",
+      "EDA",
+      "Visualization",
+      "Preprocessing",
+      "ML",
+      "Critic"
+    ],
+    "expected_next": "Report"
+  }
+]

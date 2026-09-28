@@ -1,0 +1,56 @@
+[
+  {
+    "case_id": "eda_001",
+    "required_sections": [
+      "numerical_summary",
+      "categorical_summary",
+      "correlations",
+      "outliers"
+    ]
+  },
+  {
+    "case_id": "eda_002",
+    "required_sections": [
+      "numerical_summary",
+      "categorical_summary",
+      "correlations",
+      "outliers"
+    ]
+  },
+  {
+    "case_id": "eda_003",
+    "required_sections": [
+      "numerical_summary",
+      "categorical_summary",
+      "correlations",
+      "outliers"
+    ]
+  },
+  {
+    "case_id": "eda_004",
+    "required_sections": [
+      "numerical_summary",
+      "categorical_summary",
+      "correlations",
+      "outliers"
+    ]
+  },
+  {
+    "case_id": "eda_005",
+    "required_sections": [
+      "numerical_summary",
+      "categorical_summary",
+      "correlations",
+      "outliers"
+    ]
+  },
+  {
+    "case_id": "eda_006",
+    "required_sections": [
+      "numerical_summary",
+      "categorical_summary",
+      "correlations",
+      "outliers"
+    ]
+  }
+]
