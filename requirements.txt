@@ -11,6 +11,9 @@ plotly
 # Data Input
 openpyxl
 
+# PDF input
+pdfplumber
+
 # Frontend
 streamlit
 
@@ -18,7 +21,16 @@ streamlit
 langchain
 langgraph
 langchain-google-genai
+langchain-groq
+langchain-community
 langchain-ollama
+
+# Report generation
+markdown
+reportlab
+
+# Monitoring & Tracing
+agentops
 
 # Environment
 python-dotenv
