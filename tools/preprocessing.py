@@ -64,6 +64,36 @@ def apply_preprocessing(df, plan):
         include=["object", "string", "category"]
     ).columns.tolist()
 
+    # ---------------------------------------------------------
+    # 2b. Drop / coerce datetime columns so they never reach
+    #     the encoder (prevents mixed datetime+str type error).
+    # ---------------------------------------------------------
+    datetime_cols_to_drop = []
+    for col in list(categorical_columns):
+        if pd.api.types.is_datetime64_any_dtype(data[col]):
+            datetime_cols_to_drop.append(col)
+            categorical_columns.remove(col)
+            continue
+        # Object columns that contain actual datetime objects
+        if data[col].dtype == object:
+            non_null = data[col].dropna()
+            if len(non_null) > 0:
+                types_seen = set(type(v).__name__ for v in non_null.iloc[:200])
+                if "datetime" in " ".join(types_seen).lower():
+                    try:
+                        data[col] = data[col].astype(str)
+                    except Exception:
+                        datetime_cols_to_drop.append(col)
+                        categorical_columns.remove(col)
+
+    for col in data.select_dtypes(include=["datetime64", "datetimetz"]).columns:
+        if col not in datetime_cols_to_drop:
+            datetime_cols_to_drop.append(col)
+
+    if datetime_cols_to_drop:
+        data = data.drop(columns=datetime_cols_to_drop, errors="ignore")
+        print(f"[INFO] Dropped datetime columns: {datetime_cols_to_drop}")
+
     # Remove obvious ID columns
     id_columns = []
 

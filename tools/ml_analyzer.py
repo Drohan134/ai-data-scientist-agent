@@ -181,6 +181,42 @@ def detect_target_column(df: pd.DataFrame):
 # Helper: Build Preprocessor
 # =========================================================
 
+def drop_datetime_columns(X: pd.DataFrame) -> pd.DataFrame:
+    """
+    Drop datetime-typed columns and object columns that actually
+    contain datetime values (mixed datetime/str columns are the
+    direct cause of the 'Encoders require uniformly strings or
+    numbers' error).
+    """
+    cols_to_drop = []
+
+    for col in X.columns:
+        # Explicitly typed datetime columns
+        if pd.api.types.is_datetime64_any_dtype(X[col]):
+            cols_to_drop.append(col)
+            continue
+
+        # Object columns that are mixed datetime + str
+        if X[col].dtype == object:
+            non_null = X[col].dropna()
+            if len(non_null) > 0:
+                types_seen = set(type(v).__name__ for v in non_null.iloc[:200])
+                if "datetime" in " ".join(types_seen).lower() or types_seen > {"str"}:
+                    # Contains datetimes mixed with other types — convert to str
+                    # rather than dropping so the value is still usable.
+                    try:
+                        X = X.copy()
+                        X[col] = X[col].astype(str)
+                    except Exception:
+                        cols_to_drop.append(col)
+
+    if cols_to_drop:
+        print(f"[INFO] Dropping datetime columns: {cols_to_drop}")
+        X = X.drop(columns=cols_to_drop)
+
+    return X
+
+
 def build_preprocessor(
     X: pd.DataFrame,
 ):
@@ -188,6 +224,12 @@ def build_preprocessor(
     Build preprocessing pipeline for numerical
     and categorical features.
     """
+
+    # --------------------------------------------------
+    # Remove / coerce datetime columns before selecting
+    # feature types so they never reach the encoder.
+    # --------------------------------------------------
+    X = drop_datetime_columns(X)
 
     numerical_features = X.select_dtypes(
         include=["number"]
