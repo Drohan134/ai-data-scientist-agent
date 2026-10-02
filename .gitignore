@@ -2,3 +2,8 @@
 venv/
 __pycache__/
 *.pyc
+data/cleaned_dataset.csv
+data/preprocessed_dataset.csv
+data/uploaded_dataset*
+reports/final_report*
+reports/visualizations/*.png

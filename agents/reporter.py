@@ -18,12 +18,31 @@ from reportlab.platypus import (
 
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# Ollama model config (inherits env vars set in supervisor.py / .env)
+# ---------------------------------------------------------------------------
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
 
 # ---------------------------------------------------------
-# LLM
+# LLM helpers
 # ---------------------------------------------------------
+
+def get_ollama_llm():
+    """Primary LLM: local Qwen2.5-Coder via Ollama (offline, no API key)."""
+    from langchain_ollama import ChatOllama
+
+    return ChatOllama(
+        model=OLLAMA_MODEL,
+        base_url=OLLAMA_BASE_URL,
+        temperature=0.1,
+        num_predict=2048,  # reports need a longer output
+    )
+
 
 def get_llm():
+    """Cloud fallback: Gemini API."""
     from langchain_google_genai import ChatGoogleGenerativeAI
     from gemini_guard import install_gemini_circuit_breaker
 
@@ -964,39 +983,65 @@ Here is the analysis data:
     # Generate report with Gemini
     # -----------------------------------------------------
 
-    report_source = "gemini"
+    report_source = "ollama"
 
     try:
 
         if os.getenv("AI_DATA_SCIENTIST_LLM_REPORT", "0").lower() not in {
             "1", "true", "yes", "on"
         }:
-            raise RuntimeError("LLM report generation is disabled for faster runs.")
+            raise RuntimeError("LLM report generation is disabled (AI_DATA_SCIENTIST_LLM_REPORT != 1). Using deterministic fallback.")
 
-        llm = get_llm()
+        # -------------------------------------------------------
+        # Try Ollama first (offline, fastest)
+        # -------------------------------------------------------
+        try:
+            import time
+            print(f"\nGenerating report with Ollama ({OLLAMA_MODEL})...")
+            t0 = time.time()
+            llm = get_ollama_llm()
+            response = llm.invoke(prompt)
 
-        response = llm.invoke(prompt)
+            if isinstance(response.content, list):
+                report = "".join(
+                    item.get("text", "")
+                    for item in response.content
+                    if isinstance(item, dict)
+                )
+            else:
+                report = response.content
 
-        # Handle Gemini content
+            if not report or not report.strip():
+                raise ValueError("Ollama returned an empty report.")
 
-        if isinstance(response.content, list):
+            elapsed = round(time.time() - t0, 2)
+            print(f"\nReport generated with Ollama in {elapsed}s.")
+            report_source = "ollama"
 
-            report = "".join(
-                item.get("text", "")
-                for item in response.content
-                if isinstance(item, dict)
-            )
+        except Exception as ollama_err:
+            print(f"\nOllama reporter unavailable: {ollama_err}")
+            print("Falling back to Gemini...")
 
-        else:
+            # ---------------------------------------------------
+            # Fallback to Gemini cloud
+            # ---------------------------------------------------
+            llm = get_llm()
+            response = llm.invoke(prompt)
 
-            report = response.content
+            if isinstance(response.content, list):
+                report = "".join(
+                    item.get("text", "")
+                    for item in response.content
+                    if isinstance(item, dict)
+                )
+            else:
+                report = response.content
 
-        if not report or not report.strip():
-            raise ValueError(
-                "Gemini returned an empty report."
-            )
+            if not report or not report.strip():
+                raise ValueError("Gemini returned an empty report.")
 
-        print("\nReport generated successfully using Gemini.")
+            print("\nReport generated successfully using Gemini.")
+            report_source = "gemini"
 
     except Exception as e:
 

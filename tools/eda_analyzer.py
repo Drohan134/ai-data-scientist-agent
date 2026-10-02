@@ -102,6 +102,9 @@ def analyze_eda(
             .value_counts(dropna=False)
         )
 
+        if len(value_counts) > 50:
+            value_counts = value_counts.head(50)
+
         total = len(df)
 
         categories = {}

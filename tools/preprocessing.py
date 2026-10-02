@@ -95,9 +95,11 @@ def apply_preprocessing(df, plan):
                 max_categories=30,
             )
 
+            import numpy as np
+
             encoded_array = encoder.fit_transform(
                 data[categorical_columns]
-            )
+            ).astype(np.float32)
 
             encoded_columns = encoder.get_feature_names_out(
                 categorical_columns

@@ -6,6 +6,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ---------------------------------------------------------------------------
+# Ollama model – change this to switch to a different local model.
+# Make sure the model is pulled first:  ollama pull qwen2.5-coder:7b
+# ---------------------------------------------------------------------------
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
 
 # =========================================================
 # STATE
@@ -33,7 +40,20 @@ class DataScientistState(TypedDict, total=False):
 # LLM
 # =========================================================
 
+def get_ollama_llm():
+    """Primary LLM: local Qwen2.5-Coder via Ollama (fully offline, no API key)."""
+    from langchain_ollama import ChatOllama
+
+    return ChatOllama(
+        model=OLLAMA_MODEL,
+        base_url=OLLAMA_BASE_URL,
+        temperature=0.1,
+        num_predict=512,  # supervisor only needs a short response
+    )
+
+
 def get_llm():
+    """Cloud fallback 1: Gemini API."""
     from langchain_google_genai import ChatGoogleGenerativeAI
     from gemini_guard import install_gemini_circuit_breaker
 
@@ -50,6 +70,7 @@ def get_llm():
 
 
 def get_groq_llm():
+    """Cloud fallback 2: Groq API."""
     from langchain_groq import ChatGroq
 
     api_key = os.getenv("GROQ_API_KEY")
@@ -61,6 +82,8 @@ def get_groq_llm():
         model="openai/gpt-oss-20b",
         groq_api_key=api_key
     )
+
+
 def get_fallback_llm():
     return get_groq_llm()
 
@@ -295,14 +318,43 @@ REASON: <one short reason>
     decision_source = None
 
     # Run-level circuit breakers. They reset automatically on the next graph run.
+    ollama_available = state.get("ollama_available", True)
     gemini_available = state.get("gemini_available", True)
     groq_available = state.get("groq_available", True)
 
     # =====================================================
-    # GEMINI
+    # OLLAMA (PRIMARY – fully offline, no API key needed)
     # =====================================================
 
-    if gemini_available:
+    if ollama_available:
+        try:
+            print(f"\nTrying Ollama ({OLLAMA_MODEL})...")
+            t0 = time.time()
+            decision = invoke_with_retry(
+                get_ollama_llm(),
+                prompt,
+                attempts=2
+            )
+            elapsed = round(time.time() - t0, 2)
+
+            if decision:
+                decision_source = "ollama"
+                print(f"\nOllama Supervisor Decision ({elapsed}s):")
+                print("-" * 60)
+                print(decision)
+
+        except Exception as error:
+            ollama_available = False
+            print(f"\nOllama unavailable: {error}")
+            print("Falling back to cloud LLMs...")
+    else:
+        print("\nOllama unavailable. Skipping.")
+
+    # =====================================================
+    # GEMINI (Cloud fallback 1)
+    # =====================================================
+
+    if not decision and gemini_available:
         try:
             print("\nTrying Gemini...")
             decision = invoke_with_retry(
@@ -321,11 +373,11 @@ REASON: <one short reason>
             gemini_available = False
             print("\nGemini unavailable for the rest of this run.")
             print(f"Reason: {error}")
-    else:
+    elif not decision:
         print("\nGemini circuit breaker active. Skipping Gemini.")
 
     # =====================================================
-    # GROQ FALLBACK
+    # GROQ FALLBACK (Cloud fallback 2)
     # =====================================================
 
     if not decision and groq_available:
@@ -444,6 +496,7 @@ REASON: <one short reason>
         "completed_steps": completed_steps + [
             f"supervisor decision ({decision_source})"
         ],
+        "ollama_available": ollama_available,
         "gemini_available": gemini_available,
         "groq_available": groq_available,
     }

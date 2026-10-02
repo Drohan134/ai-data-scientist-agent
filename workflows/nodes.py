@@ -1,6 +1,7 @@
+import time
 import pandas as pd
 
-from agents.supervisor import get_llm, get_fallback_llm, generate_manual_decision
+from agents.supervisor import get_ollama_llm, get_llm, get_fallback_llm, generate_manual_decision
 from tools.data_profiler import load_dataset
 
 def profiler_node(state):
@@ -275,16 +276,17 @@ REASON: <short explanation>
 """
 
     decision = None
-    source = "gemini"
+    source = "ollama"
 
     # ---------------------------------------------------------
-    # 1. Try Gemini (primary)
+    # 1. Try Ollama (primary – offline)
     # ---------------------------------------------------------
 
     try:
-
-        llm = get_llm()
-
+        from agents.supervisor import OLLAMA_MODEL
+        print(f"\nTrying Ollama ({OLLAMA_MODEL})...")
+        t0 = time.time()
+        llm = get_ollama_llm()
         response = llm.invoke(prompt)
 
         if isinstance(response.content, list):
@@ -297,20 +299,53 @@ REASON: <short explanation>
             decision = response.content
 
         if not decision or not decision.strip():
-            raise ValueError("Gemini returned an empty response.")
+            raise ValueError("Ollama returned an empty response.")
 
-    except Exception as gemini_error:
+        elapsed = round(time.time() - t0, 2)
+        print(f"Ollama succeeded in {elapsed}s.")
+        source = "ollama"
 
-        print(
-            f"\nWARNING: Gemini supervisor unavailable."
-        )
-        print(f"Reason: {gemini_error}")
+    except Exception as ollama_error:
+        print(f"\nOllama supervisor unavailable: {ollama_error}")
+        print("Falling back to cloud LLMs...")
 
-        # -------------------------------------------------
-        # 2. Try Groq (secondary)
-        # -------------------------------------------------
+        # ---------------------------------------------------------
+        # 2. Try Gemini (cloud fallback 1)
+        # ---------------------------------------------------------
 
-        print("\nTrying Groq fallback...")
+        try:
+
+            llm = get_llm()
+
+            response = llm.invoke(prompt)
+
+            if isinstance(response.content, list):
+                decision = "".join(
+                    item.get("text", "")
+                    for item in response.content
+                    if isinstance(item, dict)
+                )
+            else:
+                decision = response.content
+
+            if not decision or not decision.strip():
+                raise ValueError("Gemini returned an empty response.")
+
+            source = "gemini"
+            print("Gemini fallback succeeded.")
+
+        except Exception as gemini_error:
+
+            print(
+                f"\nWARNING: Gemini supervisor unavailable."
+            )
+            print(f"Reason: {gemini_error}")
+
+            # -------------------------------------------------
+            # 3. Try Groq (cloud fallback 2)
+            # -------------------------------------------------
+
+            print("\nTrying Groq fallback...")
 
         try:
 

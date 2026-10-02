@@ -18,6 +18,7 @@ streamlit
 langchain
 langgraph
 langchain-google-genai
+langchain-ollama
 
 # Environment
 python-dotenv
