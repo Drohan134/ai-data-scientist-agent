@@ -188,22 +188,22 @@ def ml_node(state):
 
     df = state["dataframe"]
 
-    target_column = None
+    target_column = state.get("target_column")
 
-    potential_targets = state.get(
-        "quality_report",
-        {}
-    ).get(
-        "potential_target_columns",
-        []
-    )
+    if not target_column:
+        potential_targets = state.get(
+            "quality_report",
+            {}
+        ).get(
+            "potential_target_columns",
+            []
+        )
 
-    # Prefer churn if available.
-    if "churn" in potential_targets:
-        target_column = "churn"
-
-    elif potential_targets:
-        target_column = potential_targets[0]
+        # Prefer churn if available.
+        if "churn" in potential_targets:
+            target_column = "churn"
+        elif potential_targets:
+            target_column = potential_targets[0]
 
     report = analyze_ml(
         df,

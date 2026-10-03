@@ -2,6 +2,7 @@ import os
 import sys
 import hashlib
 import time
+import threading
 import streamlit as st
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
@@ -28,6 +29,13 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(PROJECT_ROOT)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
+from pipeline_controller import (
+    get_pipeline_state,
+    is_pipeline_running,
+    start_pipeline,
+    reset_pipeline,
+)
 
 # ─────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -378,6 +386,49 @@ button[kind="primary"]:hover {
   font-size: .84rem !important;
 }
 
+/* ── Live stage result cards ─────────────────────── */
+.stage-card {
+  background: linear-gradient(135deg,#0d0f1c 0%,#111428 100%);
+  border: 1px solid rgba(99,102,241,.18);
+  border-radius: 16px;
+  padding: 18px 22px 16px;
+  margin-bottom: 14px;
+  animation: fadeSlideIn .35s ease;
+}
+@keyframes fadeSlideIn {
+  from { opacity:0; transform:translateY(10px) }
+  to   { opacity:1; transform:translateY(0)    }
+}
+.stage-card-hdr {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 12px;
+}
+.stage-card-badge {
+  background: rgba(16,185,129,.12);
+  border: 1px solid rgba(16,185,129,.28);
+  border-radius: 8px; padding: 3px 10px;
+  font-size: .7rem; font-weight: 700;
+  color: #34d399; letter-spacing: .06em; text-transform: uppercase;
+}
+.stage-card-title {
+  font-size: .92rem; font-weight: 700; color: #dde3f0;
+}
+.stage-card-body {
+  font-size: .82rem; color: #7283a8; line-height: 1.6;
+}
+.stage-metric-row {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px;
+}
+.sm {
+  background: rgba(99,102,241,.07);
+  border: 1px solid rgba(99,102,241,.16);
+  border-radius: 9px; padding: 8px 14px;
+  font-size: .78rem;
+}
+.sm .sm-label { color: #4b5680; font-size: .68rem; text-transform: uppercase; letter-spacing: .07em }
+.sm .sm-value { color: #c4b5fd; font-weight: 700; margin-top: 2px }
+.stage-divider { height:1px; background:rgba(99,102,241,.08); margin:10px 0 }
+
 /* ── Scrollbar global ────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px }
 ::-webkit-scrollbar-track { background: #070810 }
@@ -446,6 +497,11 @@ STAGES = [
     ("reporter",      "Report",      "📝"),
 ]
 
+NODE_ORDER = [
+    "profiler", "quality", "cleaning", "eda", "visualization",
+    "preprocessing", "ml", "critic", "reporter"
+]
+
 STAGE_MATCH = {
     "profiler":      ("profil",),
     "quality":       ("quality",),
@@ -499,8 +555,8 @@ with st.sidebar:
 # ═════════════════════════════════════════════════════════════════
 # File upload / state management
 # ═════════════════════════════════════════════════════════════════
-dataset_path = None
-preview_df   = None
+dataset_path = _s("uploaded_path")
+preview_df   = _s("uploaded_preview_df")
 
 if uploaded_file is not None:
     from tools.data_profiler import load_dataset
@@ -521,12 +577,19 @@ if uploaded_file is not None:
             _ss("uploaded_hash",       uhash)
             _ss("uploaded_path",       raw_path)
             st.session_state.pop("analysis_result", None)
+            reset_pipeline()
         except Exception:
             st.session_state.pop("uploaded_preview_df", None)
             st.session_state.pop("uploaded_hash",       None)
 
     dataset_path = _s("uploaded_path", raw_path)
     preview_df   = _s("uploaded_preview_df")
+    if preview_df is None and dataset_path and os.path.exists(dataset_path):
+        try:
+            preview_df = load_dataset(dataset_path)
+            _ss("uploaded_preview_df", preview_df)
+        except Exception:
+            pass
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -554,35 +617,212 @@ def _stepper_html(completed_keys: set, active_key: str) -> str:
 
 
 # ═════════════════════════════════════════════════════════════════
-# Pipeline execution
+# Pipeline state (synced with persistent pipeline controller)
 # ═════════════════════════════════════════════════════════════════
+_pipe_state = get_pipeline_state()
+if _pipe_state.get("result") is not None:
+    st.session_state["analysis_result"] = _pipe_state["result"]
+
 result     = _s("analysis_result")
 has_result = result is not None
 active_tab = _s("active_tab", "overview")
 
 
-# ─── Render the run button + pipeline status in Overview ──────────
-def _render_run_area(placeholder_progress, placeholder_stepper,
-                     placeholder_log, placeholder_run):
-    """Render the Run button + live progress – called only from Overview."""
-    completed_keys = set()
-    active_node    = _s("running_step", "")
+# ─── Stage card renderer (global – used by Overview and pipeline loop) ───
+def _render_stage_card(node_name: str, node_data: dict, acc: dict):
+    """Render a compact result card for one completed pipeline stage."""
+    icons = {
+        "profiler": "🔍", "quality": "🛡️", "cleaning": "🧹",
+        "eda": "📈", "visualization": "📊", "preprocessing": "⚙️",
+        "ml": "🤖", "critic": "🔎", "reporter": "📝",
+    }
+    titles = {
+        "profiler": "Data Profiling", "quality": "Data Quality",
+        "cleaning": "Data Cleaning", "eda": "Exploratory Analysis",
+        "visualization": "Visualizations", "preprocessing": "Preprocessing",
+        "ml": "ML Training", "critic": "Critic / Validation",
+        "reporter": "Report Generation",
+    }
+    icon  = icons.get(node_name, "✅")
+    title = titles.get(node_name, node_name.title())
 
-    if has_result:
-        completed_keys = {s.lower() for s in (result.get("completed_steps") or [])}
-        active_node    = ""
+    body_parts = []
 
-    # Stepper
-    placeholder_stepper.markdown(
-        _stepper_html(completed_keys, active_node),
+    if node_name == "profiler":
+        p = acc.get("profile") or {}
+        rows_n = p.get("rows", "N/A"); cols_n = p.get("columns", "N/A")
+        mv   = len(p.get("missing_values") or {})
+        body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Rows</div><div class="sm-value">{rows_n:,}</div></div>'
+            f'<div class="sm"><div class="sm-label">Columns</div><div class="sm-value">{cols_n}</div></div>'
+            f'<div class="sm"><div class="sm-label">Cols w/ Missing</div><div class="sm-value">{mv}</div></div>'
+            f'</div>'
+        ) if isinstance(rows_n, int) else body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Rows</div><div class="sm-value">{rows_n}</div></div>'
+            f'<div class="sm"><div class="sm-label">Columns</div><div class="sm-value">{cols_n}</div></div>'
+            f'<div class="sm"><div class="sm-label">Cols w/ Missing</div><div class="sm-value">{mv}</div></div>'
+            f'</div>'
+        )
+
+    elif node_name == "quality":
+        q  = acc.get("quality_report") or {}
+        qs = q.get("quality_score", "N/A")
+        dr = q.get("duplicate_rows", 0)
+        id_c = len(q.get("id_columns") or [])
+        qc = "#10b981" if isinstance(qs,(int,float)) and qs>=75 else ("#f59e0b" if isinstance(qs,(int,float)) and qs>=50 else "#f87171")
+        body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Quality Score</div><div class="sm-value" style="color:{qc}">{qs}/100</div></div>'
+            f'<div class="sm"><div class="sm-label">Duplicates</div><div class="sm-value">{dr}</div></div>'
+            f'<div class="sm"><div class="sm-label">ID Cols</div><div class="sm-value">{id_c}</div></div>'
+            f'</div>'
+        )
+
+    elif node_name == "cleaning":
+        cr = acc.get("cleaning_report") or {}
+        rb = cr.get("rows_before","?"); ra = cr.get("rows_after","?")
+        cb = cr.get("columns_before","?"); ca = cr.get("columns_after","?")
+        body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Rows</div><div class="sm-value">{rb} → {ra}</div></div>'
+            f'<div class="sm"><div class="sm-label">Columns</div><div class="sm-value">{cb} → {ca}</div></div>'
+            f'</div>'
+        )
+
+    elif node_name == "eda":
+        er   = acc.get("eda_report") or {}
+        corr = len(er.get("strong_correlations") or [])
+        ols  = len(er.get("outlier_columns") or er.get("outliers") or [])
+        body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Strong Correlations</div><div class="sm-value">{corr}</div></div>'
+            f'<div class="sm"><div class="sm-label">Outlier Cols</div><div class="sm-value">{ols}</div></div>'
+            f'</div>'
+        )
+
+    elif node_name == "visualization":
+        import os as _os
+        vdir = _os.path.join(PROJECT_ROOT, "reports", "visualizations")
+        n_imgs = 0
+        if _os.path.exists(vdir):
+            n_imgs = len([f for f in _os.listdir(vdir)
+                           if f.lower().endswith((".png",".jpg",".jpeg"))])
+        body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Charts Generated</div><div class="sm-value">{n_imgs}</div></div>'
+            f'</div>'
+        )
+
+    elif node_name == "preprocessing":
+        plan = acc.get("preprocessing_plan") or {}
+        steps = [k.title() for k,v in plan.items() if isinstance(v,dict) and v.get("required")]
+        body_parts.append(
+            '<div class="stage-card-body" style="margin-top:6px">'
+            + ("Applied: " + ", ".join(steps) if steps else "No transformations applied.")
+            + '</div>'
+        )
+
+    elif node_name == "ml":
+        ml_r = acc.get("ml_report") or {}
+        pt = ml_r.get("problem_type","N/A")
+        tc = ml_r.get("target_column","N/A")
+        bm = ml_r.get("best_model","N/A")
+        models = ml_r.get("models") or {}
+        is_clf = "classification" in str(pt).lower()
+        best_metric_lbl = "Best Accuracy" if is_clf else "Best R²"
+        key = "accuracy" if is_clf else "r2_score"
+        best_metric_val = "N/A"
+        if models:
+            best_metric_val = max(
+                (v.get(key, 0) for v in models.values() if isinstance(v, dict)),
+                default="N/A"
+            )
+            if isinstance(best_metric_val, float):
+                best_metric_val = round(best_metric_val, 4)
+        body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Task</div><div class="sm-value">{pt.title()}</div></div>'
+            f'<div class="sm"><div class="sm-label">Target</div><div class="sm-value">{tc}</div></div>'
+            f'<div class="sm"><div class="sm-label">{best_metric_lbl}</div><div class="sm-value">{best_metric_val}</div></div>'
+        )
+        if is_clf and models:
+            best_bal = max(
+                (v.get("balanced_accuracy", 0) for v in models.values() if isinstance(v, dict)),
+                default=None
+            )
+            if best_bal is not None and isinstance(best_bal, (int, float)):
+                body_parts.append(f'<div class="sm"><div class="sm-label">Balanced Acc</div><div class="sm-value">{best_bal:.4f}</div></div>')
+
+        body_parts.append(
+            f'<div class="sm"><div class="sm-label">Best Model</div><div class="sm-value" style="color:#a5b4fc">{bm}</div></div>'
+            f'</div>'
+        )
+
+    elif node_name == "critic":
+        cr   = acc.get("critic_report") or {}
+        nf   = len(cr.get("findings") or [])
+        nw   = len(cr.get("warnings") or [])
+        body_parts.append(
+            f'<div class="stage-metric-row">'
+            f'<div class="sm"><div class="sm-label">Findings</div><div class="sm-value">{nf}</div></div>'
+            f'<div class="sm"><div class="sm-label">Warnings</div><div class="sm-value">{nw}</div></div>'
+            f'</div>'
+        )
+
+    elif node_name == "reporter":
+        import os as _os
+        pdf_path = acc.get("pdf_report_path",
+            _os.path.join(PROJECT_ROOT,"reports","final_report.pdf"))
+        exists = _os.path.exists(pdf_path)
+        body_parts.append(
+            '<div class="stage-card-body" style="margin-top:6px">'
+            + ("✅ PDF report generated — visit the <b>Report</b> tab to download." if exists
+               else "⚠️ PDF generation may have failed — check the Report tab.")
+            + '</div>'
+        )
+
+    body_html = "".join(body_parts) or f'<div class="stage-card-body">Stage complete.</div>'
+
+    st.markdown(
+        f'<div class="stage-card">'
+        f'<div class="stage-card-hdr">'
+        f'<span style="font-size:1.2rem">{icon}</span>'
+        f'<span class="stage-card-title">{title}</span>'
+        f'<span class="stage-card-badge">✓ Done</span>'
+        f'</div>'
+        f'{body_html}'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
-    # Progress (only while running)
-    pct   = _s("pipeline_progress", 0)
-    plbl  = _s("pipeline_label",    "Idle")
-    if _s("running_step") and not has_result:
-        placeholder_progress.markdown(
+
+# ═════════════════════════════════════════════════════════════════
+# ── PIPELINE PROGRESS & STAGE RENDERING (Overview Tab)
+# ═════════════════════════════════════════════════════════════════
+
+@st.fragment(run_every=2)
+def _render_live_pipeline_progress():
+    pstate = get_pipeline_state()
+    pipe_running = pstate.get("is_running", False)
+    pct   = pstate.get("progress", 0)
+    plbl  = pstate.get("label", "Idle")
+    step  = pstate.get("running_step", "")
+    res   = pstate.get("result") or st.session_state.get("analysis_result")
+    logs  = pstate.get("logs", [])
+    err   = pstate.get("error")
+
+    completed_keys = set()
+    if res and res.get("completed_steps"):
+        completed_keys = {s.lower() for s in (res.get("completed_steps") or [])}
+
+    # Stepper
+    st.markdown(_stepper_html(completed_keys, step if pipe_running else ""), unsafe_allow_html=True)
+
+    # Progress bar + Terminal (while running or if completed)
+    if pipe_running or (0 < pct < 100):
+        st.markdown(
             f'<div class="prog-wrap">'
             f'<div class="prog-top"><span class="prog-label">Pipeline Progress</span>'
             f'<span class="prog-pct">{pct}%</span></div>'
@@ -590,42 +830,60 @@ def _render_run_area(placeholder_progress, placeholder_stepper,
             f'<div class="prog-status">{plbl}</div></div>',
             unsafe_allow_html=True,
         )
-        logs = _s("pipeline_logs", [])
-        html = "".join(
-            f'<div class="lg {e["k"]}">'
-            f'<span class="ts">[{e["ts"]}]</span>'
-            f'<span class="msg">{e["m"]}</span></div>'
-            for e in logs[-35:]
-        )
-        placeholder_log.markdown(
-            f'<div class="terminal">{html}</div>',
+        if logs:
+            html = "".join(
+                f'<div class="lg {e.get("k", "info")}">'
+                f'<span class="ts">[{e.get("ts", "")}]</span>'
+                f'<span class="msg">{e.get("m", "")}</span></div>'
+                for e in logs[-30:]
+            )
+            st.markdown(f'<div class="terminal">{html}</div>', unsafe_allow_html=True)
+
+    if err:
+        st.error(f"Pipeline error: {err}")
+
+    # Show completed stage cards live as each completes!
+    if res and res.get("completed_steps"):
+        st.markdown(
+            '<div class="sec-hdr"><span class="sec-hdr-icon">⚡</span>'
+            '<h2>Completed Stage Results</h2><div class="sec-line"></div></div>',
             unsafe_allow_html=True,
         )
-    else:
-        placeholder_progress.empty()
-        placeholder_log.empty()
+        completed_step_names = [s.lower() for s in (res.get("completed_steps") or [])]
+        for _node in NODE_ORDER:
+            _prefixes = STAGE_MATCH.get(_node, (_node,))
+            if any(any(p in c for p in _prefixes) for c in completed_step_names):
+                _render_stage_card(_node, {}, res)
 
-    # Run button
-    sc = "idle"
-    sl = "Ready" if uploaded_file else "Upload a dataset first"
-    if has_result:   sc, sl = "done",    "Analysis complete"
-    if _s("running_step"): sc, sl = "running", "Running..."
+    # If background pipeline has completed, rerun once so top status pill updates to "Analysis complete"
+    if not pipe_running and not st.session_state.get("_pipeline_finished_rerun_done"):
+        st.session_state["_pipeline_finished_rerun_done"] = True
+        st.rerun()
 
-    with placeholder_run:
-        col_lbl, col_btn = st.columns([3, 1])
-        with col_lbl:
-            st.markdown(
-                f'<div class="pill {sc}" style="margin-top:4px">'
-                f'<span class="pill-dot"></span>{sl}</div>',
-                unsafe_allow_html=True,
-            )
-        with col_btn:
-            return st.button(
-                "🚀 Run Analysis",
-                type="primary",
-                disabled=(uploaded_file is None or bool(_s("running_step"))),
-                use_container_width=True,
-            )
+
+def _render_idle_pipeline_display():
+    pstate = get_pipeline_state()
+    res = pstate.get("result") or st.session_state.get("analysis_result")
+    completed_keys = set()
+    if res and res.get("completed_steps"):
+        completed_keys = {s.lower() for s in (res.get("completed_steps") or [])}
+    st.markdown(_stepper_html(completed_keys, ""), unsafe_allow_html=True)
+
+    err = pstate.get("error")
+    if err:
+        st.error(f"Pipeline error: {err}")
+
+    if res and res.get("completed_steps"):
+        st.markdown(
+            '<div class="sec-hdr"><span class="sec-hdr-icon">⚡</span>'
+            '<h2>Completed Stage Results</h2><div class="sec-line"></div></div>',
+            unsafe_allow_html=True,
+        )
+        completed_step_names = [s.lower() for s in (res.get("completed_steps") or [])]
+        for _node in NODE_ORDER:
+            _prefixes = STAGE_MATCH.get(_node, (_node,))
+            if any(any(p in c for p in _prefixes) for c in completed_step_names):
+                _render_stage_card(_node, {}, res)
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -640,13 +898,35 @@ if active_tab == "overview":
         unsafe_allow_html=True,
     )
 
-    # ── Run controls (top-right of Overview) ─────────────────────
-    ph_progress = st.empty()
-    ph_stepper  = st.empty()
-    ph_log      = st.empty()
-    ph_run      = st.empty()
+    # ── Run controls bar ──────────────────────────────────────────
+    running = is_pipeline_running()
+    curr_result = result or _pipe_state.get("result")
+    sc = "running" if running else ("done" if (curr_result and curr_result.get("completed_steps")) else "idle")
+    sl = "Running..." if running else ("Analysis complete" if sc == "done" else ("Ready" if (uploaded_file or (dataset_path and os.path.exists(dataset_path))) else "Upload a dataset first"))
 
-    run_clicked = _render_run_area(ph_progress, ph_stepper, ph_log, ph_run)
+    col_lbl, col_btn = st.columns([3, 1])
+    with col_lbl:
+        st.markdown(
+            f'<div class="pill {sc}" style="margin-top:4px">'
+            f'<span class="pill-dot"></span>{sl}</div>',
+            unsafe_allow_html=True,
+        )
+    with col_btn:
+        if running:
+            st.button("⏳ Running in background...", disabled=True, use_container_width=True)
+        else:
+            can_run = (uploaded_file is not None) or (dataset_path and os.path.exists(dataset_path))
+            if st.button("🚀 Run Analysis", type="primary", disabled=not can_run, use_container_width=True):
+                st.session_state["_pipeline_finished_rerun_done"] = False
+                started = start_pipeline(dataset_path, preview_df)
+                if started:
+                    st.rerun()
+
+    # ── Progress and live stage results ───────────────────────────
+    if running:
+        _render_live_pipeline_progress()
+    else:
+        _render_idle_pipeline_display()
 
     # ── Dataset preview ───────────────────────────────────────────
     if preview_df is not None:
@@ -663,7 +943,13 @@ if active_tab == "overview":
             mb = round(preview_df.memory_usage(deep=True).sum() / 1e6, 2)
             st.markdown(kpi("g","💾","Memory", f"{mb} MB"), unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-        st.dataframe(preview_df.head(10), use_container_width=True)
+
+        # Display preview safely without Arrow datetime conversion errors
+        disp_df = preview_df.head(10).copy()
+        for col in disp_df.columns:
+            if disp_df[col].dtype == "object":
+                disp_df[col] = disp_df[col].astype(str)
+        st.dataframe(disp_df, use_container_width=True)
 
     elif uploaded_file is None:
         st.markdown(
@@ -675,106 +961,15 @@ if active_tab == "overview":
             unsafe_allow_html=True,
         )
 
-    # ── Completed steps ───────────────────────────────────────────
-    if has_result:
+    # ── Completed steps list ──────────────────────────────────────
+    if result and result.get("completed_steps"):
         done = [s for s in (result.get("completed_steps") or [])
                 if not s.lower().startswith("supervisor")]
-        st.markdown(sh("⚙️", "Pipeline Completed"), unsafe_allow_html=True)
+        st.markdown(sh("⚙️", "Pipeline Completed" if len(done) >= 9 else "Stages Completed"), unsafe_allow_html=True)
         cols = st.columns(3)
         for i, step in enumerate(done):
             with cols[i % 3]:
                 st.success(f"✓ {step}")
-
-    # ─── EXECUTE pipeline when button clicked ─────────────────────
-    if run_clicked and uploaded_file is not None:
-        _ss("pipeline_logs",     [])
-        _ss("pipeline_progress", 5)
-        _ss("pipeline_label",    "Compiling pipeline graph...")
-        _ss("running_step",      "profiler")
-        _ss("analysis_result",   None)
-
-        logs = [{"m": "Pipeline initialized", "k": "info", "ts": time.strftime("%H:%M:%S")}]
-        completed_keys = set()
-
-        def _update_ui(pct, label, active_node, log_items):
-            ph_stepper.markdown(_stepper_html(completed_keys, active_node), unsafe_allow_html=True)
-            ph_progress.markdown(
-                f'<div class="prog-wrap">'
-                f'<div class="prog-top"><span class="prog-label">Pipeline Progress</span>'
-                f'<span class="prog-pct">{pct}%</span></div>'
-                f'<div class="prog-track"><div class="prog-fill" style="width:{pct}%"></div></div>'
-                f'<div class="prog-status">{label}</div></div>',
-                unsafe_allow_html=True,
-            )
-            html = "".join(
-                f'<div class="lg {e["k"]}">'
-                f'<span class="ts">[{e["ts"]}]</span>'
-                f'<span class="msg">{e["m"]}</span></div>'
-                for e in log_items[-35:]
-            )
-            ph_log.markdown(f'<div class="terminal">{html}</div>', unsafe_allow_html=True)
-
-        _update_ui(5, "Compiling workflow graph...", "profiler", logs)
-
-        try:
-            from workflows.graph import build_graph
-            from gemini_guard import reset_gemini_circuit_breaker
-            reset_gemini_circuit_breaker()
-
-            _compiled_graph = build_graph()
-            logs.append({"m": "LangGraph workflow compiled successfully", "k": "done", "ts": time.strftime("%H:%M:%S")})
-            _update_ui(8, "Starting stage 1: Profiler...", "profiler", logs)
-
-            _init_state = {
-                "dataset_path":    dataset_path,
-                "dataframe":       preview_df,
-                "completed_steps": [],
-                "messages":        [],
-            }
-
-            accumulated_state = dict(_init_state)
-
-            NODE_ORDER = [
-                "profiler", "quality", "cleaning", "eda", "visualization",
-                "preprocessing", "ml", "critic", "reporter"
-            ]
-
-            for chunk in _compiled_graph.stream(_init_state):
-                node_name = list(chunk.keys())[0]
-                node_data = chunk[node_name]
-                accumulated_state.update(node_data)
-
-                if "completed_steps" in node_data:
-                    accumulated_state["completed_steps"] = node_data["completed_steps"]
-                completed_keys = {s.lower() for s in accumulated_state.get("completed_steps", [])}
-
-                p0, p1, plbl = PROG_MAP.get(node_name, (50, 60, f"{node_name}..."))
-                logs.append({"m": f"✓  {node_name.upper()} completed", "k": "done", "ts": time.strftime("%H:%M:%S")})
-
-                curr_idx = NODE_ORDER.index(node_name) if node_name in NODE_ORDER else -1
-                next_node = NODE_ORDER[curr_idx + 1] if curr_idx >= 0 and curr_idx + 1 < len(NODE_ORDER) else ""
-
-                if next_node:
-                    _, _, next_lbl = PROG_MAP.get(next_node, (p1, p1, f"Running {next_node}..."))
-                    logs.append({"m": f"▶  Starting {next_node.upper()}...", "k": "step", "ts": time.strftime("%H:%M:%S")})
-                    _update_ui(p1, next_lbl, next_node, logs)
-                else:
-                    _update_ui(100, "Analysis complete! Finalizing report...", "", logs)
-
-                time.sleep(0.05)
-
-            _ss("analysis_result",   accumulated_state)
-            _ss("pipeline_progress", 100)
-            _ss("pipeline_label",    "✅ Analysis complete!")
-            _ss("running_step",      "")
-            _ss("pipeline_logs",     logs)
-            st.rerun()
-
-        except Exception as exc:
-            logs.append({"m": f"✗ Error: {exc}", "k": "error", "ts": time.strftime("%H:%M:%S")})
-            _ss("running_step",  "")
-            _ss("pipeline_logs", logs)
-            st.error(f"Pipeline execution error: {exc}")
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -788,11 +983,12 @@ elif active_tab == "quality":
         unsafe_allow_html=True,
     )
 
-    if not has_result:
-        st.info("Run the analysis pipeline to see data quality results.")
+    quality  = (result or {}).get("quality_report") or {}
+    cleaning = (result or {}).get("cleaning_report") or {}
+
+    if not quality and not cleaning:
+        st.info("Data Quality stage has not run yet. Run the analysis pipeline to see data quality results.")
     else:
-        quality  = result.get("quality_report") or {}
-        cleaning = result.get("cleaning_report") or {}
         qs       = quality.get("quality_score", 0)
         qc       = "#10b981" if qs >= 75 else ("#f59e0b" if qs >= 50 else "#f87171")
         id_cols  = quality.get("id_columns") or []
@@ -815,8 +1011,26 @@ elif active_tab == "quality":
             mv = quality.get("missing_values") or {}
             if mv:
                 import pandas as pd
-                df_mv = pd.DataFrame([(k,v) for k,v in mv.items()],
-                                     columns=["Column","Missing"]).sort_values("Missing",ascending=False)
+                rows = []
+                for col_name, val in mv.items():
+                    if isinstance(val, dict):
+                        cnt = val.get("count", 0)
+                        pct = val.get("percentage", 0.0)
+                    elif isinstance(val, (int, float)):
+                        cnt = val
+                        pct = None
+                    else:
+                        cnt = str(val)
+                        pct = None
+                    pct_str = f"{pct:.1f}%" if isinstance(pct, (int, float)) else ("N/A" if pct is None else str(pct))
+                    rows.append({
+                        "Column": str(col_name),
+                        "Missing": cnt,
+                        "Percentage": pct_str,
+                    })
+                df_mv = pd.DataFrame(rows)
+                if "Missing" in df_mv.columns and pd.api.types.is_numeric_dtype(df_mv["Missing"]):
+                    df_mv = df_mv.sort_values("Missing", ascending=False)
                 st.dataframe(df_mv, use_container_width=True, hide_index=True)
             else:
                 st.markdown('<div class="fi ok"><span class="fi-dot">✅</span>'
@@ -827,8 +1041,14 @@ elif active_tab == "quality":
             if cleaning:
                 rb = cleaning.get("rows_before","N/A");    ra = cleaning.get("rows_after","N/A")
                 cb = cleaning.get("columns_before","N/A"); ca = cleaning.get("columns_after","N/A")
-                ma = cleaning.get("missing_values_after") or {}
-                rem = sum(ma.values()) if ma else 0
+                rem = cleaning.get("remaining_missing_values")
+                if rem is None:
+                    ma = cleaning.get("missing_values_after") or {}
+                    rem = sum(
+                        v if isinstance(v, (int, float))
+                        else (v.get("missing_count", 0) if isinstance(v, dict) else 0)
+                        for v in ma.values()
+                    ) if ma else 0
                 st.markdown(
                     f'<div style="display:grid;gap:8px">'
                     f'<div class="fi"><span class="fi-dot">📊</span>'
@@ -861,10 +1081,10 @@ elif active_tab == "eda":
         unsafe_allow_html=True,
     )
 
-    if not has_result:
-        st.info("Run the analysis pipeline to see EDA results.")
+    eda = (result or {}).get("eda_report") or {}
+    if not eda:
+        st.info("EDA stage has not run yet. Run the analysis pipeline to see EDA results.")
     else:
-        eda = result.get("eda_report") or {}
         ds  = eda.get("dataset_shape") or {}
         if ds:
             c1, c2 = st.columns(2)
@@ -910,8 +1130,12 @@ elif active_tab == "visualizations":
         unsafe_allow_html=True,
     )
 
-    if not has_result:
-        st.info("Run the analysis pipeline to generate visualizations.")
+    vdir = os.path.join(PROJECT_ROOT, "reports", "visualizations")
+    imgs = sorted([f for f in os.listdir(vdir) if f.lower().endswith((".png",".jpg",".jpeg"))]) if os.path.exists(vdir) else []
+    viz_report = (result or {}).get("visualization_report")
+
+    if not imgs and not viz_report:
+        st.info("Visualizations stage has not run yet. Run the analysis pipeline to generate visualizations.")
     else:
         vdir = os.path.join(PROJECT_ROOT, "reports", "visualizations")
         if os.path.exists(vdir):
@@ -955,38 +1179,35 @@ elif active_tab == "preprocessing":
         unsafe_allow_html=True,
     )
 
-    if not has_result:
-        st.info("Run the analysis pipeline to see preprocessing results.")
+    plan = (result or {}).get("preprocessing_plan") or {}
+    if not plan:
+        st.info("Preprocessing stage has not run yet. Run the analysis pipeline to see preprocessing results.")
     else:
-        plan = result.get("preprocessing_plan") or {}
-        if plan:
-            def _plan_card(col, icon, title, key):
-                with col:
-                    item   = plan.get(key) or {}
-                    req    = item.get("required", False)
-                    method = item.get("method", "N/A")
-                    reason = item.get("reason", "")
-                    st.markdown(sh(icon, title), unsafe_allow_html=True)
-                    cls = "ok" if req else ""
-                    ico = "✅" if req else "⬜"
-                    body = f"Required · <b>{method}</b>" if req else "Not required"
-                    st.markdown(
-                        f'<div class="fi {cls}"><span class="fi-dot">{ico}</span>'
-                        f'<div><div>{body}</div>'
-                        + (f'<div style="font-size:.75rem;color:#374168;margin-top:3px">{reason}</div>' if reason else '')
-                        + '</div></div>',
-                        unsafe_allow_html=True,
-                    )
+        def _plan_card(col, icon, title, key):
+            with col:
+                item   = plan.get(key) or {}
+                req    = item.get("required", False)
+                method = item.get("method", "N/A")
+                reason = item.get("reason", "")
+                st.markdown(sh(icon, title), unsafe_allow_html=True)
+                cls = "ok" if req else ""
+                ico = "✅" if req else "⬜"
+                body = f"Required · <b>{method}</b>" if req else "Not required"
+                st.markdown(
+                    f'<div class="fi {cls}"><span class="fi-dot">{ico}</span>'
+                    f'<div><div>{body}</div>'
+                    + (f'<div style="font-size:.75rem;color:#374168;margin-top:3px">{reason}</div>' if reason else '')
+                    + '</div></div>',
+                    unsafe_allow_html=True,
+                )
 
-            c1, c2 = st.columns(2)
-            _plan_card(c1, "💉", "Imputation",    "imputation")
-            _plan_card(c2, "📏", "Scaling",        "scaling")
-            c3, c4 = st.columns(2)
-            _plan_card(c3, "🏷️", "Encoding",       "encoding")
-            _plan_card(c4, "🔀", "Transformation", "transformation")
-            st.caption("Automatically determined by the Preprocessing Agent.")
-        else:
-            st.info("Preprocessing information unavailable.")
+        c1, c2 = st.columns(2)
+        _plan_card(c1, "💉", "Imputation",    "imputation")
+        _plan_card(c2, "📏", "Scaling",        "scaling")
+        c3, c4 = st.columns(2)
+        _plan_card(c3, "🏷️", "Encoding",       "encoding")
+        _plan_card(c4, "🔀", "Transformation", "transformation")
+        st.caption("Automatically determined by the Preprocessing Agent.")
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1000,69 +1221,168 @@ elif active_tab == "ml":
         unsafe_allow_html=True,
     )
 
-    if not has_result:
-        st.info("Run the analysis pipeline to see ML results.")
+    ml = (result or {}).get("ml_report") or {}
+    if not ml:
+        st.info("Machine Learning stage has not run yet. Run the analysis pipeline to see ML results.")
     else:
-        ml = result.get("ml_report") or {}
-        if ml:
-            pt = ml.get("problem_type","N/A")
-            tc = ml.get("target_column","N/A")
-            bm = ml.get("best_model","N/A")
-            tr = ml.get("train_samples","N/A")
-            te = ml.get("test_samples","N/A")
+        # Resolve working dataframe for dynamic ML re-evaluation
+        df_for_ml = (result or {}).get("dataframe")
+        if df_for_ml is None and preview_df is not None:
+            df_for_ml = preview_df
+        elif df_for_ml is None and dataset_path and os.path.exists(dataset_path):
+            from tools.data_profiler import load_dataset
+            try:
+                df_for_ml = load_dataset(dataset_path)
+            except Exception:
+                pass
 
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.markdown(kpi("p","🎯","Problem Type",
-                    f'<span style="font-size:.95rem;display:block;margin-top:6px">{pt}</span>'), unsafe_allow_html=True)
-            with c2:
-                st.markdown(kpi("b","🏹","Target Column",
-                    f'<span style="font-size:.95rem;display:block;margin-top:6px">{tc}</span>'), unsafe_allow_html=True)
-            with c3:
-                st.markdown(kpi("g","📚","Train Samples",
-                    f"{tr:,}" if isinstance(tr,int) else tr), unsafe_allow_html=True)
-            with c4:
-                st.markdown(kpi("a","🧪","Test Samples",
-                    f"{te:,}" if isinstance(te,int) else te), unsafe_allow_html=True)
+        if "ml_reports_by_target" not in st.session_state:
+            st.session_state["ml_reports_by_target"] = {}
 
-            st.markdown("<br>", unsafe_allow_html=True)
+        current_tc = ml.get("target_column")
+        if current_tc and current_tc not in st.session_state["ml_reports_by_target"]:
+            st.session_state["ml_reports_by_target"][current_tc] = ml
 
-            feats = ml.get("features") or {}
-            nf = feats.get("numerical") or []
-            cf = feats.get("categorical") or []
-            fl, fr = st.columns(2)
-            with fl:
-                st.markdown(sh("🔢","Numerical Features"), unsafe_allow_html=True)
-                st.markdown(
-                    "".join(f'<span class="tag">{f}</span>' for f in nf)
-                    or '<div class="fi"><span>None</span></div>',
-                    unsafe_allow_html=True,
+        # ── Target Column Selector in ML Models Tab ───────────────
+        if df_for_ml is not None and len(df_for_ml.columns) > 0:
+            all_cols = list(df_for_ml.columns)
+            sel_idx = all_cols.index(current_tc) if current_tc in all_cols else 0
+
+            col_sel, col_info = st.columns([1.8, 2.2])
+            with col_sel:
+                chosen_target = st.selectbox(
+                    "🎯 Target Column to Predict:",
+                    options=all_cols,
+                    index=sel_idx,
+                    key="ml_tab_target_selector",
+                    help="Switching the target column automatically re-trains and re-evaluates all ML models for this target in real time.",
                 )
-            with fr:
-                st.markdown(sh("🏷️","Categorical Features"), unsafe_allow_html=True)
+            with col_info:
                 st.markdown(
-                    "".join(f'<span class="tag">{f}</span>' for f in cf)
-                    or '<div class="fi"><span>None</span></div>',
+                    f'<div style="margin-top:28px;font-size:0.84rem;color:#94a3b8">'
+                    f'Select any column to immediately re-train and compare models for that prediction target.'
+                    f'</div>',
                     unsafe_allow_html=True,
                 )
 
-            models = ml.get("models") or {}
-            if models:
-                st.markdown(sh("📊","Model Performance"), unsafe_allow_html=True)
-                import pandas as pd
-                mkeys = ["accuracy","precision","recall","f1_score",
-                         "roc_auc","mae","mse","rmse","r2_score"]
-                rows = []
-                for mn, mm in models.items():
-                    row = {"Model": mn}
-                    for mk in mkeys:
-                        if mk in mm:
-                            v = mm[mk]
-                            row[mk] = round(v,4) if isinstance(v,float) else v
-                    rows.append(row)
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            # If user switched target column, retrieve cached or compute new ML report
+            if chosen_target and chosen_target != current_tc:
+                if chosen_target in st.session_state["ml_reports_by_target"]:
+                    ml = st.session_state["ml_reports_by_target"][chosen_target]
+                else:
+                    with st.spinner(f"⚡ Training and evaluating models for target '{chosen_target}'..."):
+                        from tools.ml_analyzer import analyze_ml
+                        try:
+                            new_ml = analyze_ml(df_for_ml, target_column=chosen_target)
+                            st.session_state["ml_reports_by_target"][chosen_target] = new_ml
+                            ml = new_ml
+                            if result is not None:
+                                result["ml_report"] = new_ml
+                                result["target_column"] = chosen_target
+                                result["problem_type"] = new_ml.get("problem_type")
+                                st.session_state["analysis_result"] = result
+                        except Exception as e:
+                            st.error(f"Failed to train models for target '{chosen_target}': {e}")
 
-            st.markdown(sh("🏆","Best Model"), unsafe_allow_html=True)
+        st.markdown("<div style='margin-bottom:12px'></div>", unsafe_allow_html=True)
+
+        pt = ml.get("problem_type","N/A")
+        tc = ml.get("target_column","N/A")
+        bm = ml.get("best_model","N/A")
+        tr = ml.get("train_samples","N/A")
+        te = ml.get("test_samples","N/A")
+
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            st.markdown(kpi("p","🎯","Problem Type",
+                f'<span style="font-size:.95rem;display:block;margin-top:6px">{pt}</span>'), unsafe_allow_html=True)
+        with c2:
+            st.markdown(kpi("b","🏹","Target Column",
+                f'<span style="font-size:.95rem;display:block;margin-top:6px">{tc}</span>'), unsafe_allow_html=True)
+        with c3:
+            st.markdown(kpi("g","📚","Train Samples",
+                f"{tr:,}" if isinstance(tr,int) else tr), unsafe_allow_html=True)
+        with c4:
+            st.markdown(kpi("a","🧪","Test Samples",
+                f"{te:,}" if isinstance(te,int) else te), unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        feats = ml.get("features") or {}
+        nf = feats.get("numerical") or []
+        cf = feats.get("categorical") or []
+        fl, fr = st.columns(2)
+        with fl:
+            st.markdown(sh("🔢","Numerical Features"), unsafe_allow_html=True)
+            st.markdown(
+                "".join(f'<span class="tag">{f}</span>' for f in nf)
+                or '<div class="fi"><span>None</span></div>',
+                unsafe_allow_html=True,
+            )
+        with fr:
+            st.markdown(sh("🏷️","Categorical Features"), unsafe_allow_html=True)
+            st.markdown(
+                "".join(f'<span class="tag">{f}</span>' for f in cf)
+                or '<div class="fi"><span>None</span></div>',
+                unsafe_allow_html=True,
+            )
+
+        models = ml.get("models") or {}
+        if models:
+            st.markdown(sh("📊","Model Performance"), unsafe_allow_html=True)
+            import pandas as pd
+            is_clf = "classification" in str(pt).lower()
+            if is_clf:
+                mkeys = ["accuracy","balanced_accuracy","precision","recall","f1_score","roc_auc"]
+                primary_col = "accuracy"
+                best_title = "Best Model by Accuracy"
+                metric_lbl = "Accuracy"
+
+                n_classes = ml.get("n_classes") or len(ml.get("classes") or [])
+                if n_classes and n_classes > 1:
+                    rnd_base = (1.0 / n_classes) * 100
+                    st.markdown(
+                        f'<div class="fi info" style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);margin-bottom:14px;padding:10px 14px;border-radius:8px">'
+                        f'<span>ℹ️ <b>Multi-Class Target ({n_classes} classes)</b>: '
+                        f'Random guess baseline is <b>{rnd_base:.1f}%</b>. '
+                        f'<b>Balanced Accuracy</b> evaluates unweighted average recall across all classes to account for class distribution.</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+            else:
+                mkeys = ["r2_score","mae","mse","rmse"]
+                primary_col = "r2_score"
+                best_title = "Best Model by R²"
+                metric_lbl = "R²"
+
+            rows = []
+            for mn, mm in models.items():
+                row = {"Model": mn}
+                for mk in mkeys:
+                    if mk in mm:
+                        v = mm[mk]
+                        row[mk] = round(v,4) if isinstance(v,float) else v
+                rows.append(row)
+
+            df_models = pd.DataFrame(rows)
+
+            # Ensure primary_col is placed immediately after 'Model'
+            if primary_col in df_models.columns:
+                cols = ["Model", primary_col] + [c for c in df_models.columns if c not in ("Model", primary_col)]
+                df_models = df_models[cols]
+                # Sort strictly by primary metric descending
+                df_models = df_models.sort_values(primary_col, ascending=False)
+
+            st.dataframe(df_models, use_container_width=True, hide_index=True)
+
+            # Predict and display the best model by the problem type's primary metric
+            if not df_models.empty and primary_col in df_models.columns:
+                top_row = df_models.iloc[0]
+                top_name = top_row["Model"]
+                top_score = top_row[primary_col]
+                bm = f"{top_name} ({metric_lbl}: {top_score:.4f})" if isinstance(top_score, (int, float)) else str(top_name)
+
+            st.markdown(sh("🏆", best_title), unsafe_allow_html=True)
             st.markdown(
                 f'<div class="fi ok" style="background:rgba(16,185,129,.06);border-color:rgba(16,185,129,.22)">'
                 f'<span style="font-size:1.4rem">🏆</span>'
@@ -1070,7 +1390,13 @@ elif active_tab == "ml":
                 unsafe_allow_html=True,
             )
         else:
-            st.info("Machine learning report unavailable.")
+            st.markdown(sh("🏆","Best Model"), unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="fi ok" style="background:rgba(16,185,129,.06);border-color:rgba(16,185,129,.22)">'
+                f'<span style="font-size:1.4rem">🏆</span>'
+                f'<span style="color:#34d399;font-weight:700;font-size:1.05rem">{bm}</span></div>',
+                unsafe_allow_html=True,
+            )
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -1084,10 +1410,10 @@ elif active_tab == "validation":
         unsafe_allow_html=True,
     )
 
-    if not has_result:
-        st.info("Run the analysis pipeline to see validation results.")
+    critic   = (result or {}).get("critic_report") or {}
+    if not critic:
+        st.info("Validation stage has not run yet. Run the analysis pipeline to see validation results.")
     else:
-        critic   = result.get("critic_report") or {}
         findings = critic.get("findings") or []
         warnings = critic.get("warnings") or []
         rec      = critic.get("recommendation","")
@@ -1125,7 +1451,7 @@ elif active_tab == "validation":
                 unsafe_allow_html=True,
             )
 
-        rs = result.get("report_source","")
+        rs = (result or {}).get("report_source","")
         st.markdown(sh("🤖","Report Source"), unsafe_allow_html=True)
         if rs == "gemini":
             st.success("🤖 Report generated using Gemini.")
@@ -1146,13 +1472,15 @@ elif active_tab == "report":
         unsafe_allow_html=True,
     )
 
-    if not has_result:
-        st.info("Run the analysis pipeline to generate the report.")
+    pdf_path = (result or {}).get(
+        "pdf_report_path",
+        os.path.join(PROJECT_ROOT, "reports", "final_report.pdf")
+    )
+    final_rep = (result or {}).get("final_report")
+
+    if not os.path.exists(pdf_path) and not final_rep:
+        st.info("Report stage has not run yet. Run the analysis pipeline to generate the report.")
     else:
-        pdf_path = result.get(
-            "pdf_report_path",
-            os.path.join(PROJECT_ROOT, "reports", "final_report.pdf")
-        )
 
         # ── PDF (primary) ──────────────────────────────────────
         st.markdown(sh("📥","Download Report"), unsafe_allow_html=True)

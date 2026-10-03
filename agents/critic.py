@@ -188,32 +188,31 @@ def critic_node(state: Dict[str, Any]):
     # 6. MODEL COMPARISON
     # =========================================================
 
-    best_model = ml_report.get(
-        "best_model"
-    )
+    best_model = ml_report.get("best_model")
+    problem_type = ml_report.get("problem_type", "classification")
+    is_clf = "classification" in str(problem_type).lower()
+    metric_key = "accuracy" if is_clf else "r2_score"
+    metric_lbl = "accuracy" if is_clf else "R² score"
 
     if best_model:
-
         findings.append(
-            f"Best model by F1 score: {best_model}."
+            f"Best model by {metric_lbl}: {best_model}."
         )
 
-        # Check whether all models have same F1
+        # Check whether all models have same score
         if models:
-
-            f1_values = [
-                metrics.get("f1_score")
+            score_values = [
+                metrics.get(metric_key)
                 for metrics in models.values()
-                if metrics.get("f1_score") is not None
+                if metrics.get(metric_key) is not None
             ]
 
             if (
-                f1_values
-                and len(set(f1_values)) == 1
+                score_values
+                and len(set(score_values)) == 1
             ):
-
                 warnings.append(
-                    "All evaluated models have identical F1 scores. "
+                    f"All evaluated models have identical {metric_lbl}s. "
                     "The selected best model should therefore not be "
                     "interpreted as meaningfully superior."
                 )

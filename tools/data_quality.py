@@ -141,17 +141,37 @@ def analyze_data_quality(df: pd.DataFrame) -> dict:
             continue
 
         unique_count = df[column].nunique(dropna=True)
+        dtype = str(df[column].dtype)
+        is_numeric = pd.api.types.is_numeric_dtype(df[column])
 
-        # Binary target
+        # Binary target (any dtype)
         if unique_count == 2:
             potential_targets.append(column)
 
-        # Small categorical target
+        # Small categorical target (string/category)
         elif (
-            str(df[column].dtype) in ["object", "string", "category"]
+            dtype in ["object", "string", "category"]
             and 2 <= unique_count <= 10
         ):
             potential_targets.append(column)
+
+        # Numeric regression target: continuous column with many unique values
+        # Use position heuristic: last numeric column with high unique count
+        elif is_numeric and unique_count > 20:
+            # Only add if it looks like a response variable (not a raw ID)
+            unique_ratio = unique_count / max(rows, 1)
+            if unique_ratio <= 0.98:   # not a near-perfect unique key
+                potential_targets.append(column)
+
+    # Prioritise: last column is most commonly the target in tabular datasets
+    cols_list = df.columns.tolist()
+    last_col = cols_list[-1] if cols_list else None
+    if (
+        last_col
+        and last_col not in id_columns
+        and last_col not in potential_targets
+    ):
+        potential_targets.append(last_col)
 
     # -------------------------------------------------
     # 8. Class Distribution
