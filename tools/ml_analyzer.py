@@ -5,8 +5,13 @@ import warnings
 import numpy as np
 import pandas as pd
 
-# Prevent slow wmic queries and loky warnings on Windows
-os.environ.setdefault("LOKY_MAX_CPU_COUNT", str(os.cpu_count() or 4))
+# Enforce strict 1-thread/1-core footprint to prevent Streamlit Community Cloud CPU throttling
+os.environ["LOKY_MAX_CPU_COUNT"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 from sklearn.base import BaseEstimator, TransformerMixin, clone
 from sklearn.compose import ColumnTransformer
@@ -54,15 +59,16 @@ warnings.filterwarnings("ignore")
 
 
 # =============================================================
-# Thresholds (tune here to adjust speed vs accuracy trade-off)
+# Thresholds (optimized for Streamlit Cloud 1-vCPU container limits)
 # =============================================================
-_GLOBAL_SAMPLE_CAP = 20_000   # Max rows any model trains on
-_KNN_CAP           =  5_000   # KNN is O(n) at predict time
-_NB_CAP            = 50_000   # Naive Bayes is very fast
-_RF_TREES_LARGE    =     80   # Trees for RF when n > 2500 (was 50)
-_RF_TREES_SMALL    =    150   # Trees for RF on small data (was 100)
-_HIST_ITER         =    100   # HistGB iterations (was 60)
+_GLOBAL_SAMPLE_CAP = 10_000   # Max rows any model trains on (prevents CPU throttle)
+_KNN_CAP           =  3_000   # KNN is O(n) at predict time
+_NB_CAP            = 20_000   # Naive Bayes is very fast
+_RF_TREES_LARGE    =     40   # Trees for RF when n > 2500
+_RF_TREES_SMALL    =     60   # Trees for RF on small data
+_HIST_ITER         =     50   # HistGB iterations
 _HIST_LEAF         =     31   # HistGB max_leaf_nodes
+_N_JOBS            =      1   # Strictly 1 worker: eliminates multi-process spikes that trigger CPU throttle
 
 # ─── Problem-type thresholds ─────────────────────────────────
 # A numeric column is treated as classification only when ALL of:
@@ -622,15 +628,15 @@ def _tune_top_model(
         return None
 
     try:
-        # Cap samples to keep tuning super fast (<= 3000 rows)
+        # Cap samples to keep tuning super fast and low CPU (<= 1500 rows)
         X_tune, y_tune = _sample(
-            X_fit, y_fit, cap=3000, stratify=(problem_type == "classification")
+            X_fit, y_fit, cap=1500, stratify=(problem_type == "classification")
         )
 
         n_combos = 1
         for v in param_dist.values():
             n_combos *= len(v)
-        n_iter = min(5, n_combos)
+        n_iter = min(3, n_combos)
 
         scoring = "accuracy" if problem_type == "classification" else "r2"
         cv = 3
@@ -815,10 +821,10 @@ def analyze_ml(df: pd.DataFrame, target_column=None):
             "Logistic Regression": (
                 LogisticRegression(
                     solver="lbfgs",
-                    max_iter=1000,
+                    max_iter=500,
                     tol=1e-4,
                     random_state=42,
-                    n_jobs=-1,
+                    n_jobs=_N_JOBS,
                     class_weight="balanced" if is_imbalanced else None,
                     multi_class="auto",
                     C=1.0,
@@ -829,10 +835,10 @@ def analyze_ml(df: pd.DataFrame, target_column=None):
             "Random Forest": (
                 RandomForestClassifier(
                     n_estimators=_RF_TREES_LARGE if is_large else _RF_TREES_SMALL,
-                    max_depth=15 if is_large else None,
+                    max_depth=12 if is_large else None,
                     min_samples_leaf=2,
                     random_state=42,
-                    n_jobs=-1,
+                    n_jobs=_N_JOBS,
                     class_weight="balanced" if is_imbalanced else None,
                 ),
                 _GLOBAL_SAMPLE_CAP,
@@ -865,7 +871,7 @@ def analyze_ml(df: pd.DataFrame, target_column=None):
             "K-Nearest Neighbors": (
                 KNeighborsClassifier(
                     n_neighbors=min(7, max(3, int(np.sqrt(n_tr) // 2))),
-                    n_jobs=-1,
+                    n_jobs=_N_JOBS,
                     weights="distance",
                 ),
                 _KNN_CAP,
@@ -1016,10 +1022,10 @@ def analyze_ml(df: pd.DataFrame, target_column=None):
             "Random Forest": (
                 RandomForestRegressor(
                     n_estimators=_RF_TREES_LARGE if is_large else _RF_TREES_SMALL,
-                    max_depth=15 if is_large else None,
+                    max_depth=12 if is_large else None,
                     min_samples_leaf=2,
                     random_state=42,
-                    n_jobs=-1,
+                    n_jobs=_N_JOBS,
                 ),
                 _GLOBAL_SAMPLE_CAP,
             ),
@@ -1046,7 +1052,7 @@ def analyze_ml(df: pd.DataFrame, target_column=None):
             "K-Nearest Neighbors": (
                 KNeighborsRegressor(
                     n_neighbors=min(7, max(3, int(np.sqrt(n_tr) // 2))),
-                    n_jobs=-1,
+                    n_jobs=_N_JOBS,
                     weights="distance",
                 ),
                 _KNN_CAP,

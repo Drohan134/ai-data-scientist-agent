@@ -1,4 +1,11 @@
 import os
+os.environ["LOKY_MAX_CPU_COUNT"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import sys
 import hashlib
 import time
@@ -802,7 +809,7 @@ def _render_stage_card(node_name: str, node_data: dict, acc: dict):
 # ── PIPELINE PROGRESS & STAGE RENDERING (Overview Tab)
 # ═════════════════════════════════════════════════════════════════
 
-@st.fragment(run_every=2)
+@st.fragment(run_every=3)
 def _render_live_pipeline_progress():
     pstate = get_pipeline_state()
     pipe_running = pstate.get("is_running", False)
