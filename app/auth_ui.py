@@ -240,7 +240,7 @@ def render_auth_page():
             auth_url = google_oauth.build_auth_url(state="google_oauth")
             # Render as a real hyperlink styled as a button
             st.markdown(f"""
-            <a href="{auth_url}" target="_self" style="text-decoration:none;display:block;width:100%">
+            <a href="{auth_url}" target="_top" style="text-decoration:none;display:block;width:100%">
               <div style="
                 display:flex;align-items:center;justify-content:center;gap:10px;
                 background:#fff;border:1px solid #dadce0;border-radius:12px;
