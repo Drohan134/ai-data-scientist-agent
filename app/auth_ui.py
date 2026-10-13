@@ -17,11 +17,12 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-try:
-    import google_oauth
-    _GOOGLE_AVAILABLE = google_oauth.is_configured()
-except Exception:
-    _GOOGLE_AVAILABLE = False
+def is_google_available() -> bool:
+    try:
+        import google_oauth
+        return google_oauth.is_configured()
+    except Exception:
+        return False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -202,7 +203,7 @@ def render_auth_page():
     st.markdown(_AUTH_CSS, unsafe_allow_html=True)
 
     # ── Handle Google OAuth callback first ─────────────────────────
-    if _GOOGLE_AVAILABLE:
+    if is_google_available():
         handled = _handle_oauth_callback()
         if handled:
             return   # either logged in or showed error
@@ -234,7 +235,8 @@ def render_auth_page():
             st.success(st.session_state.pop("_reset_success_msg"))
 
         # ── Google button ────────────────────────────────────────
-        if _GOOGLE_AVAILABLE:
+        if is_google_available():
+            import google_oauth
             auth_url = google_oauth.build_auth_url(state="google_oauth")
             # Render as a real hyperlink styled as a button
             st.markdown(f"""
@@ -261,7 +263,7 @@ def render_auth_page():
 
             st.markdown('<div class="or-divider">or</div>', unsafe_allow_html=True)
         else:
-            st.warning("⚠️ Google OAuth not configured. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to `.env`.")
+            st.warning("⚠️ Google OAuth not configured. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to Streamlit Secrets (or `.env` locally).")
 
         # ── Username / Password form ─────────────────────────────
         with st.form("login_form", clear_on_submit=False):
@@ -553,7 +555,7 @@ def render_users_management_tab(current_user: dict):
         st.markdown('<div class="sec-hdr"><span class="sec-hdr-icon">⚡</span><h2>Database Actions</h2><div class="sec-line"></div></div>', unsafe_allow_html=True)
         if st.button("🔄 Refresh Database State", use_container_width=True, key="btn_refresh_db"):
             st.rerun()
-        google_status = "✅ Configured" if _GOOGLE_AVAILABLE else "❌ Not configured"
+        google_status = "✅ Configured" if is_google_available() else "❌ Not configured"
         st.markdown(f"""
         <div style="font-size:0.8rem;color:#7283a8;line-height:1.6;margin-top:10px">
         • <b>Database File:</b> <code>{auth_db.DB_PATH}</code><br>

@@ -18,14 +18,31 @@ os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 _DOTENV = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
 load_dotenv(dotenv_path=_DOTENV, override=True)
 
+def _find_in_dict(d, target_key: str):
+    target_lower = target_key.lower()
+    for k, v in d.items():
+        if str(k).lower() == target_lower:
+            return v
+        if hasattr(v, "items"):
+            found = _find_in_dict(v, target_key)
+            if found is not None:
+                return found
+    return None
+
+
 def _get_setting(key: str, default: str = "") -> str:
-    val = os.getenv(key)
-    if val is not None and val != "":
-        return str(val).strip()
+    for k in (key, key.upper(), key.lower()):
+        val = os.getenv(k)
+        if val is not None and str(val).strip() != "":
+            return str(val).strip()
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and key in st.secrets:
-            return str(st.secrets[key]).strip()
+        if hasattr(st, "secrets"):
+            if key in st.secrets:
+                return str(st.secrets[key]).strip()
+            found = _find_in_dict(st.secrets, key)
+            if found is not None and str(found).strip() != "":
+                return str(found).strip()
     except Exception:
         pass
     return default

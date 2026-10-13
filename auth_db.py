@@ -24,24 +24,48 @@ try:
 except ImportError:
     _HAS_BCRYPT = False
 
+def _find_in_dict(d, target_key: str):
+    target_lower = target_key.lower()
+    for k, v in d.items():
+        if str(k).lower() == target_lower:
+            return v
+        if hasattr(v, "items"):
+            found = _find_in_dict(v, target_key)
+            if found is not None:
+                return found
+    return None
+
+
 def _get_setting(key: str, default: str = "") -> str:
-    val = os.getenv(key)
-    if val is not None and val != "":
-        return str(val).strip()
+    for k in (key, key.upper(), key.lower()):
+        val = os.getenv(k)
+        if val is not None and str(val).strip() != "":
+            return str(val).strip()
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and key in st.secrets:
-            return str(st.secrets[key]).strip()
+        if hasattr(st, "secrets"):
+            if key in st.secrets:
+                return str(st.secrets[key]).strip()
+            found = _find_in_dict(st.secrets, key)
+            if found is not None and str(found).strip() != "":
+                return str(found).strip()
     except Exception:
         pass
     return default
 
 
-_raw_sb_url = _get_setting("SUPABASE_URL").rstrip("/")
-if _raw_sb_url.endswith("/rest/v1"):
-    _raw_sb_url = _raw_sb_url[:-8].rstrip("/")
+def get_supabase_url() -> str:
+    url = _get_setting("SUPABASE_URL").rstrip("/")
+    if url.endswith("/rest/v1"):
+        url = url[:-8].rstrip("/")
+    return url
+
+def get_supabase_service_key() -> str:
+    return _get_setting("SUPABASE_SERVICE_KEY")
+
+_raw_sb_url = get_supabase_url()
 SUPABASE_URL         = _raw_sb_url
-SUPABASE_SERVICE_KEY = _get_setting("SUPABASE_SERVICE_KEY")
+SUPABASE_SERVICE_KEY = get_supabase_service_key()
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "users.db")
 
@@ -51,7 +75,7 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "user
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_supabase() -> bool:
-    return bool(SUPABASE_URL and SUPABASE_SERVICE_KEY)
+    return bool(get_supabase_url() and get_supabase_service_key())
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -59,9 +83,10 @@ def _is_supabase() -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _headers(prefer: str = "") -> dict:
+    s_key = get_supabase_service_key()
     h = {
-        "apikey":        SUPABASE_SERVICE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+        "apikey":        s_key,
+        "Authorization": f"Bearer {s_key}",
         "Content-Type":  "application/json",
         "Accept":        "application/json",
     }
@@ -71,7 +96,7 @@ def _headers(prefer: str = "") -> dict:
 
 
 def _rest(table: str) -> str:
-    return f"{SUPABASE_URL}/rest/v1/{table}"
+    return f"{get_supabase_url()}/rest/v1/{table}"
 
 
 def _sb_select(table: str, filters: dict = None, columns: str = "*", limit: int = None) -> list:
