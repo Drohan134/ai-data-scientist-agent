@@ -145,32 +145,26 @@ button[kind="primary"]:hover {
     margin-bottom: 12px;
 }
 
-/* Same-tab Google button */
-.google-btn-link {
-    text-decoration: none !important;
-    display: block !important;
+/* Google link button */
+[data-testid="stLinkButton"] {
     width: 100% !important;
-    margin-bottom: 4px;
 }
-.google-btn {
+[data-testid="stLinkButton"] a {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 10px !important;
     background: #ffffff !important;
+    color: #3c4043 !important;
     border: 1px solid #dadce0 !important;
     border-radius: 12px !important;
-    padding: 11px 20px !important;
-    cursor: pointer !important;
-    width: 100% !important;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-    font-size: 0.92rem !important;
     font-weight: 600 !important;
-    color: #3c4043 !important;
+    font-size: 0.92rem !important;
+    padding: 11px 20px !important;
+    text-decoration: none !important;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
     transition: all 0.2s ease !important;
 }
-.google-btn:hover {
+[data-testid="stLinkButton"] a:hover {
     background: #f8fafd !important;
     border-color: #c2c7d0 !important;
     box-shadow: 0 2px 8px rgba(0,0,0,0.16) !important;
@@ -287,20 +281,13 @@ def render_auth_page():
             if google_oauth is None:
                 import google_oauth
             auth_url = google_oauth.build_auth_url(state="google_oauth")
-            st.markdown(f"""
-            <a href="{auth_url}" target="_self" class="google-btn-link">
-              <div class="google-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20" height="20">
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
-                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
-                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
-                  <path fill="none" d="M0 0h48v48H0z"/>
-                </svg>
-                <span>Continue with Google</span>
-              </div>
-            </a>
-            """, unsafe_allow_html=True)
+            st.link_button(
+                "🌐 Continue with Google",
+                auth_url,
+                use_container_width=True,
+                type="secondary",
+                help="Sign in securely with your Google account",
+            )
             st.markdown('<div class="or-divider">or</div>', unsafe_allow_html=True)
         else:
             st.warning("⚠️ Google OAuth not configured. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to Streamlit Secrets (or `.env` locally).")
