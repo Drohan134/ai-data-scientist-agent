@@ -35,5 +35,16 @@ agentops
 # Environment
 python-dotenv
 
+# Authentication & Google OAuth
+requests
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+requests-oauthlib
+bcrypt
+
+# Database
+supabase
+
 # Testing
 pytest

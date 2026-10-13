@@ -30,12 +30,31 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-agentops.init(auto_start_session=False, instrument_llm_calls=False)
+# Sync Streamlit Cloud secrets to os.environ for cloud deployment
+try:
+    def _sync_secrets_to_env(sec_map):
+        for _k, _v in sec_map.items():
+            if isinstance(_v, (str, int, float, bool)):
+                os.environ[str(_k)] = str(_v)
+            elif hasattr(_v, "items"):
+                _sync_secrets_to_env(_v)
+    if hasattr(st, "secrets"):
+        _sync_secrets_to_env(st.secrets)
+except Exception:
+    pass
+
+try:
+    agentops.init(auto_start_session=False, instrument_llm_calls=False)
+except Exception:
+    pass
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
 os.chdir(PROJECT_ROOT)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+if APP_DIR not in sys.path:
+    sys.path.insert(0, APP_DIR)
 
 from pipeline_controller import (
     get_pipeline_state,
@@ -43,6 +62,11 @@ from pipeline_controller import (
     start_pipeline,
     reset_pipeline,
 )
+import auth_db
+try:
+    from auth_ui import render_auth_page, render_users_management_tab
+except ImportError:
+    from app.auth_ui import render_auth_page, render_users_management_tab
 
 # ─────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -94,8 +118,46 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #dde3f0 }
   padding: 18px 20px 6px;
 }
 
+/* ── Sidebar user profile card ───────────────────── */
+.sb-user-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin: 12px 14px 8px;
+  background: rgba(99,102,241,.08);
+  border: 1px solid rgba(99,102,241,.2);
+  border-radius: 12px;
+}
+.sb-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg,#6366f1,#38bdf8);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: .84rem;
+  flex-shrink: 0;
+}
+.sb-user-name {
+  font-size: .83rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-user-role {
+  font-size: .68rem;
+  color: #7283a8;
+  font-weight: 600;
+}
+
 /* ── Sidebar buttons (nav tabs) ──────────────────── */
-.stButton > button {
+[data-testid="stSidebar"] .stButton > button {
   background: transparent !important;
   border: 1px solid transparent !important;
   border-radius: 9px !important;
@@ -107,12 +169,29 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #dde3f0 }
   transition: all .18s ease !important;
   box-shadow: none !important;
 }
-.stButton > button:hover {
+[data-testid="stSidebar"] .stButton > button:hover {
   background: rgba(99,102,241,.1) !important;
   border-color: rgba(99,102,241,.22) !important;
   color: #c4b5fd !important;
   transform: none !important;
   box-shadow: none !important;
+}
+
+/* ── Main area standard buttons ──────────────────── */
+.main .stButton > button:not([kind="primary"]) {
+  background: rgba(99, 102, 241, 0.12) !important;
+  border: 1px solid rgba(99, 102, 241, 0.28) !important;
+  border-radius: 10px !important;
+  color: #dde3f0 !important;
+  font-weight: 600 !important;
+  padding: 10px 18px !important;
+  transition: all 0.2s ease !important;
+}
+.main .stButton > button:not([kind="primary"]):hover {
+  background: rgba(99, 102, 241, 0.24) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  color: #ffffff !important;
+  transform: translateY(-1px) !important;
 }
 
 /* Primary run button – override narrow specificity */
@@ -482,14 +561,15 @@ def sh(icon, title):
 # Sidebar  (brand + upload + nav only – no pipeline status, no run btn)
 # ═════════════════════════════════════════════════════════════════
 TABS = [
-    ("🏠", "Overview",       "overview"),
-    ("🛡️", "Data Quality",   "quality"),
-    ("📈", "EDA",            "eda"),
-    ("📊", "Visualizations", "visualizations"),
-    ("⚙️", "Preprocessing",  "preprocessing"),
-    ("🤖", "ML Models",      "ml"),
-    ("🔎", "Validation",     "validation"),
-    ("📄", "Report",         "report"),
+    ("🏠", "Overview",         "overview"),
+    ("🛡️", "Data Quality",     "quality"),
+    ("📈", "EDA",              "eda"),
+    ("📊", "Visualizations",   "visualizations"),
+    ("⚙️", "Preprocessing",    "preprocessing"),
+    ("🤖", "ML Models",        "ml"),
+    ("🔎", "Validation",       "validation"),
+    ("📄", "Report",           "report"),
+    ("👥", "Users & Database", "users"),
 ]
 
 STAGES = [
@@ -533,6 +613,18 @@ PROG_MAP = {
     "reporter":      (94,100, "📝 Generating final report..."),
 }
 
+# ═════════════════════════════════════════════════════════════════
+# Authentication Gate
+# ═════════════════════════════════════════════════════════════════
+current_user = st.session_state.get("authenticated_user")
+if current_user is None:
+    st.markdown("<style>[data-testid='stSidebar'] { display: none !important; }</style>", unsafe_allow_html=True)
+    render_auth_page()
+    st.stop()
+
+# Keep active user session alive in database
+auth_db.heartbeat_user_session(st.session_state.get("session_token", ""))
+
 with st.sidebar:
     st.markdown(
         '<div class="sb-brand">'
@@ -541,6 +633,30 @@ with st.sidebar:
         '</div>',
         unsafe_allow_html=True,
     )
+
+    # ── User Profile & Sign Out ──
+    uname = current_user.get("full_name") or current_user.get("username", "User")
+    initials = uname[:2].upper()
+    urole = current_user.get("role", "user").upper()
+    auth_src = "Google" if current_user.get("auth_provider") == "google" else "Local"
+
+    st.markdown(f"""
+    <div class="sb-user-card">
+      <div class="sb-avatar">{initials}</div>
+      <div style="flex:1;min-width:0">
+        <div class="sb-user-name">{uname}</div>
+        <div class="sb-user-role">{urole} ({auth_src}) · <span style="color:#10b981">● Online</span></div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("🚪  Sign Out", key="_btn_signout", use_container_width=True):
+        auth_db.end_user_session(st.session_state.get("session_token", ""))
+        st.session_state.pop("authenticated_user", None)
+        st.session_state.pop("session_token", None)
+        st.session_state.pop("analysis_result", None)
+        st.session_state.pop("pipeline_ran", None)
+        st.rerun()
 
     st.markdown('<div class="sb-section">Dataset</div>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader(
@@ -584,6 +700,7 @@ if uploaded_file is not None:
             _ss("uploaded_hash",       uhash)
             _ss("uploaded_path",       raw_path)
             st.session_state.pop("analysis_result", None)
+            st.session_state.pop("pipeline_ran", None)
             reset_pipeline()
         except Exception:
             st.session_state.pop("uploaded_preview_df", None)
@@ -597,6 +714,20 @@ if uploaded_file is not None:
             _ss("uploaded_preview_df", preview_df)
         except Exception:
             pass
+else:
+    # No file uploaded: clean up session so previous run never pollutes initial start
+    if not is_pipeline_running():
+        st.session_state.pop("uploaded_path", None)
+        st.session_state.pop("uploaded_preview_df", None)
+        st.session_state.pop("uploaded_hash", None)
+        st.session_state.pop("analysis_result", None)
+        st.session_state.pop("pipeline_ran", None)
+        dataset_path = None
+        preview_df = None
+        # Clear server-level pipeline state if lingering idle
+        p_check = get_pipeline_state()
+        if p_check.get("result") is not None and not p_check.get("is_running"):
+            reset_pipeline()
 
 
 # ═════════════════════════════════════════════════════════════════
@@ -627,11 +758,15 @@ def _stepper_html(completed_keys: set, active_key: str) -> str:
 # Pipeline state (synced with persistent pipeline controller)
 # ═════════════════════════════════════════════════════════════════
 _pipe_state = get_pipeline_state()
-if _pipe_state.get("result") is not None:
-    st.session_state["analysis_result"] = _pipe_state["result"]
+_pipe_running = is_pipeline_running()
+
+# Only sync pipeline result if the pipeline is active or this session initiated a run
+if (_pipe_running or st.session_state.get("pipeline_ran")) and (uploaded_file is not None or preview_df is not None):
+    if _pipe_state.get("result") is not None:
+        st.session_state["analysis_result"] = _pipe_state["result"]
 
 result     = _s("analysis_result")
-has_result = result is not None
+has_result = (result is not None) and bool(result.get("completed_steps")) and bool(uploaded_file is not None or preview_df is not None) and bool(st.session_state.get("pipeline_ran"))
 active_tab = _s("active_tab", "overview")
 
 
@@ -659,15 +794,10 @@ def _render_stage_card(node_name: str, node_data: dict, acc: dict):
         p = acc.get("profile") or {}
         rows_n = p.get("rows", "N/A"); cols_n = p.get("columns", "N/A")
         mv   = len(p.get("missing_values") or {})
+        rows_disp = f"{rows_n:,}" if isinstance(rows_n, int) else f"{rows_n}"
         body_parts.append(
             f'<div class="stage-metric-row">'
-            f'<div class="sm"><div class="sm-label">Rows</div><div class="sm-value">{rows_n:,}</div></div>'
-            f'<div class="sm"><div class="sm-label">Columns</div><div class="sm-value">{cols_n}</div></div>'
-            f'<div class="sm"><div class="sm-label">Cols w/ Missing</div><div class="sm-value">{mv}</div></div>'
-            f'</div>'
-        ) if isinstance(rows_n, int) else body_parts.append(
-            f'<div class="stage-metric-row">'
-            f'<div class="sm"><div class="sm-label">Rows</div><div class="sm-value">{rows_n}</div></div>'
+            f'<div class="sm"><div class="sm-label">Rows</div><div class="sm-value">{rows_disp}</div></div>'
             f'<div class="sm"><div class="sm-label">Columns</div><div class="sm-value">{cols_n}</div></div>'
             f'<div class="sm"><div class="sm-label">Cols w/ Missing</div><div class="sm-value">{mv}</div></div>'
             f'</div>'
@@ -870,13 +1000,16 @@ def _render_live_pipeline_progress():
 
 def _render_idle_pipeline_display():
     pstate = get_pipeline_state()
-    res = pstate.get("result") or st.session_state.get("analysis_result")
+    # Only show completed results if this session has a valid, completed run with a dataset
+    is_valid = bool(st.session_state.get("pipeline_ran") and (uploaded_file is not None or preview_df is not None))
+    res = (st.session_state.get("analysis_result") or pstate.get("result")) if is_valid else None
+
     completed_keys = set()
     if res and res.get("completed_steps"):
         completed_keys = {s.lower() for s in (res.get("completed_steps") or [])}
     st.markdown(_stepper_html(completed_keys, ""), unsafe_allow_html=True)
 
-    err = pstate.get("error")
+    err = pstate.get("error") if is_valid else None
     if err:
         st.error(f"Pipeline error: {err}")
 
@@ -907,9 +1040,11 @@ if active_tab == "overview":
 
     # ── Run controls bar ──────────────────────────────────────────
     running = is_pipeline_running()
-    curr_result = result or _pipe_state.get("result")
-    sc = "running" if running else ("done" if (curr_result and curr_result.get("completed_steps")) else "idle")
-    sl = "Running..." if running else ("Analysis complete" if sc == "done" else ("Ready" if (uploaded_file or (dataset_path and os.path.exists(dataset_path))) else "Upload a dataset first"))
+    has_dataset = bool(uploaded_file is not None or (dataset_path and os.path.exists(dataset_path)))
+    has_valid_run = bool(st.session_state.get("pipeline_ran") and has_dataset and result and result.get("completed_steps"))
+
+    sc = "running" if running else ("done" if has_valid_run else "idle")
+    sl = "Running..." if running else ("Analysis complete" if sc == "done" else ("Ready" if has_dataset else "Upload a dataset first"))
 
     col_lbl, col_btn = st.columns([3, 1])
     with col_lbl:
@@ -922,9 +1057,12 @@ if active_tab == "overview":
         if running:
             st.button("⏳ Running in background...", disabled=True, use_container_width=True)
         else:
-            can_run = (uploaded_file is not None) or (dataset_path and os.path.exists(dataset_path))
+            can_run = has_dataset
             if st.button("🚀 Run Analysis", type="primary", disabled=not can_run, use_container_width=True):
                 st.session_state["_pipeline_finished_rerun_done"] = False
+                st.session_state["pipeline_ran"] = True
+                st.session_state.pop("analysis_result", None)
+                reset_pipeline()
                 started = start_pipeline(dataset_path, preview_df)
                 if started:
                     st.rerun()
@@ -969,7 +1107,7 @@ if active_tab == "overview":
         )
 
     # ── Completed steps list ──────────────────────────────────────
-    if result and result.get("completed_steps"):
+    if has_valid_run and result and result.get("completed_steps"):
         done = [s for s in (result.get("completed_steps") or [])
                 if not s.lower().startswith("supervisor")]
         st.markdown(sh("⚙️", "Pipeline Completed" if len(done) >= 9 else "Stages Completed"), unsafe_allow_html=True)
@@ -1554,3 +1692,10 @@ elif active_tab == "report":
                                        mime="text/csv", use_container_width=True)
             else:
                 st.warning("Preprocessed dataset not available.")
+
+
+# ═════════════════════════════════════════════════════════════════
+# ── TAB: USERS & DATABASE ────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════
+elif active_tab == "users":
+    render_users_management_tab(current_user)
