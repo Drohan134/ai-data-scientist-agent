@@ -383,7 +383,12 @@ def create_password_reset_link(email_or_username: str, base_url: str = None) -> 
     else:
         _sqlite_insert_reset(user["id"], user["email"], token, expires_at)
 
-    app_base = (base_url or os.getenv("APP_BASE_URL", "http://localhost:8501")).strip().rstrip("/")
+    app_base = (
+        base_url
+        or _get_setting("APP_BASE_URL")
+        or _get_setting("GOOGLE_REDIRECT_URI")
+        or "https://ai-data-scientist-agent.streamlit.app"
+    ).strip().rstrip("/")
     reset_link = f"{app_base}/?reset_token={token}"
 
     smtp_ok, smtp_msg = _dispatch_reset_email(
@@ -753,30 +758,52 @@ def _sqlite_active_sessions():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _dispatch_reset_email(to_email: str, username: str, reset_link: str) -> Tuple[bool, str]:
-    smtp_user     = _get_setting("SMTP_USER")
-    smtp_pass     = (_get_setting("SMTP_PASS") or _get_setting("SMTP_PASSWORD")).replace(" ", "")
-    smtp_host     = _get_setting("SMTP_HOST")
-    smtp_port_raw = _get_setting("SMTP_PORT")
+    import email.utils
+
+    smtp_user     = (_get_setting("SMTP_USER") or "").strip()
+    smtp_pass     = (_get_setting("SMTP_PASS") or _get_setting("SMTP_PASSWORD") or "").replace(" ", "").strip()
+    smtp_host     = (_get_setting("SMTP_HOST") or "").strip()
+    smtp_port_raw = (_get_setting("SMTP_PORT") or "").strip()
 
     # Smart default for Gmail
     if not smtp_host and smtp_user.lower().endswith("@gmail.com"):
         smtp_host = "smtp.gmail.com"
 
     smtp_port  = int(smtp_port_raw) if smtp_port_raw else 587
-    raw_from   = _get_setting("SMTP_FROM")
-    if raw_from and not (smtp_host == "smtp.gmail.com" and "aidatascientist.com" in raw_from):
-        from_email = raw_from
-    else:
-        from_email = f"AI Data Scientist <{smtp_user}>"
 
     if not smtp_host or not smtp_user or not smtp_pass:
-        return False, "SMTP credentials (SMTP_USER, SMTP_PASS) not configured in .env."
+        return False, "SMTP credentials (SMTP_USER, SMTP_PASS) not configured in .env or secrets."
+
+    # Parse and align sender address
+    raw_from     = _get_setting("SMTP_FROM")
+    display_name = "AI Data Scientist"
+
+    # When sending through Gmail SMTP, the From address MUST align with the authenticated Gmail account
+    # to pass Gmail's strict DKIM/SPF bulk-sender policies (RFC 5322 & RFC 5321 alignment).
+    is_gmail = ("gmail.com" in smtp_host.lower()) or smtp_user.lower().endswith("@gmail.com")
+    if is_gmail:
+        sender_email = smtp_user
+        if raw_from:
+            parsed_name, _ = email.utils.parseaddr(raw_from)
+            if parsed_name:
+                display_name = parsed_name
+    elif raw_from:
+        parsed_name, parsed_addr = email.utils.parseaddr(raw_from)
+        sender_email = parsed_addr if parsed_addr else smtp_user
+        if parsed_name:
+            display_name = parsed_name
+    else:
+        sender_email = smtp_user
+
+    from_header = email.utils.formataddr((display_name, sender_email))
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Reset Your Password — AI Data Scientist"
-        msg["From"]    = f"AI Data Scientist <{from_email}>"
-        msg["To"]      = to_email
+        msg["Subject"]  = "Reset Your Password — AI Data Scientist"
+        msg["From"]     = from_header
+        msg["To"]       = to_email.strip()
+        msg["Reply-To"] = sender_email
+        msg["Sender"]   = sender_email
 
         plain_text = f"""Hello {username},
 
@@ -834,15 +861,18 @@ If you did not request this, please disregard this email.
         msg.attach(MIMEText(plain_text, "plain"))
         msg.attach(MIMEText(html_text, "html"))
 
+        envelope_from = sender_email
+        envelope_to = [to_email.strip()]
+
         if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=12) as s:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as s:
                 s.login(smtp_user, smtp_pass)
-                s.sendmail(from_email, [to_email], msg.as_string())
+                s.sendmail(envelope_from, envelope_to, msg.as_string())
         else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=12) as s:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
                 s.starttls()
                 s.login(smtp_user, smtp_pass)
-                s.sendmail(from_email, [to_email], msg.as_string())
+                s.sendmail(envelope_from, envelope_to, msg.as_string())
 
         return True, "Email sent successfully!"
     except Exception as e:
